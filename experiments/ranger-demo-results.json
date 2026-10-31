@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-31",
+  "episode": "f7caba2d067e4ab4a03f2b20e515425c",
+  "model": "gpt-6-astra",
+  "model_calls": 12,
+  "execution": {
+    "status": "completed",
+    "duration_s": 10.0,
+    "distance_m": 1.543965227007404,
+    "max_tilt": 7.770661282802183,
+    "max_concurrent": 2,
+    "completed": 70,
+    "missed": 8
+  },
+  "validation": [
+    {
+      "seed": 0,
+      "requested_s": 6,
+      "healthy": true,
+      "speed_m_s": 0.17043215310105503,
+      "max_tilt_deg": 6.610799148389117,
+      "measured_gallop": false
+    },
+    {
+      "seed": 1,
+      "requested_s": 6,
+      "healthy": true,
+      "speed_m_s": 0.17077632115215988,
+      "max_tilt_deg": 7.516182700079574,
+      "measured_gallop": false
+    }
+  ],
+  "policies": {
+    "FR": {
+      "offset": 0,
+      "swing_s": 0.1392,
+      "clearance": 0.045,
+      "forward_bias": -0.002,
+      "lateral_bias": 0,
+      "placement_gain": 0.05,
+      "reason": "Both trials were healthy but averaged about 0.169 m/s versus the 0.2 m/s goal. Move only FR's forward placement 2 mm rearward to reduce braking and encourage forward speed. Keep timing, clearance and other placement parameters unchanged to preserve the tested stagger with peers. This small speed correction has not yet been tested."
+    },
+    "FL": {
+      "offset": 0.18,
+      "swing_s": 0.1392,
+      "clearance": 0.045,
+      "forward_bias": -0.002,
+      "lateral_bias": 0,
+      "placement_gain": 0.05,
+      "reason": "Both trials were healthy but reached only 0.169\u20130.170 m/s versus the 0.2 m/s goal. Move FL's foot target rearward by 2 mm to modestly reduce braking. Keep all other parameters unchanged, preserving the peers' staggered timing and half-cycle separation from RL. This single placement adjustment still needs validation."
+    },
+    "RR": {
+      "offset": 0.5,
+      "swing_s": 0.1392,
+      "clearance": 0.045,
+      "forward_bias": -0.002,
+      "lateral_bias": 0,
+      "placement_gain": 0.05,
+      "reason": "Both trials were healthy but reached only 0.169\u20130.170 m/s versus the 0.2 m/s goal. Move RR's target 2 mm rearward to seek less braking and more forward progress. Keep timing, clearance, lateral placement and gain unchanged to preserve the tested peer coordination; this small adjustment remains untested."
+    },
+    "RL": {
+      "offset": 0.68,
+      "swing_s": 0.1392,
+      "clearance": 0.045,
+      "forward_bias": -0.002,
+      "lateral_bias": 0,
+      "placement_gain": 0.05,
+      "reason": "Both trials were healthy but reached only 0.169-0.170 m/s versus the 0.2 m/s goal. Move RL's target 2 mm rearward to test reduced braking and improved forward progress. Keep timing, clearance, lateral placement and gain unchanged, preserving the peers' stagger and half-cycle separation from FL. This single placement adjustment has not yet been tested."
+    }
+  },
+  "recovery": {
+    "tick": 500,
+    "checkpoint_equal": true,
+    "actors_reactivated": true,
+    "decisions_preserved": true
+  },
+  "timing": "Independent periodic clocks; no group landing barrier. Policy is negotiated before the live run."
+}

@@ -1,0 +1,19 @@
+{
+  "period": 0.48,
+  "duty": 0.71,
+  "vx": 0.2,
+  "height": 0.3004,
+  "clearance": 0.045,
+  "stance_kp": 8,
+  "zweight": 500,
+  "pitchweight": 400,
+  "velocityweight": 10,
+  "placement_gain": 0.05,
+  "regularization": 0.0005,
+  "offsets": [
+    0,
+    0.18,
+    0.5,
+    0.68
+  ]
+}

@@ -27,6 +27,16 @@ def session(runtime):
     return ActorSession.create(Simulation(rig=False), runtime, 1)
 
 
+def test_gait_search_journal_survives_restart_and_rejects_conflicts(runtime):
+    value = encode({'gait': {'period': .5}, 'speed': .15})
+    assert runtime.call('GaitSearch', 'search-test', 'put', 'trial-1', value)['speed'] == .15
+    runtime.restart()
+    assert runtime.call('GaitSearch', 'search-test', 'inspect')['trial-1'] == value
+    assert runtime.call('GaitSearch', 'search-test', 'put', 'trial-1', value)['speed'] == .15
+    with pytest.raises(ActorError, match='Conflicting'):
+        runtime.call('GaitSearch', 'search-test', 'put', 'trial-1', encode({'speed': .3}))
+
+
 def finish(session):
     for _ in range(1400):
         if session.sim.crawl.state.status != 'running':

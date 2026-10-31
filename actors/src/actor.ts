@@ -1,6 +1,151 @@
 import { Actor, Ephemeral, Persisted } from "terse-sdk/actor"
 
 import { LEGS, propose, selectIntents, validateGoal, pairedProfile, type Leg, type Observation, type Intent, type Goal } from "./policy"
+import { validateDecisions, validateLegPlan, type Decision } from './team-contract'
+
+/** One durable model context per leg. Model transport runs in the Python host. */
+export class TeamRanger extends Actor {
+    @Persisted private requests = '{}'
+    @Ephemeral private activation = crypto.randomUUID()
+
+    async request(contextJson: string): Promise<string> {
+        const context = JSON.parse(contextJson), leg = this.id.split('.').at(-1) as Leg
+        if (!LEGS.includes(leg) || this.id !== `${context.episode}.${leg}` ||
+            !Number.isInteger(context.round) || context.round < 0 || context.round > 3) throw new Error('Invalid planning context')
+        const id = `${context.episode}.${context.round}.${leg}`, requests = JSON.parse(this.requests)
+        if (requests[id]) {
+            if (requests[id].contextJson !== contextJson) throw new Error('Conflicting planning request')
+            return JSON.stringify(requests[id])
+        }
+        const previous = Object.values(requests).filter((r: any) => r.decision).map((r: any) => r.decision)
+        requests[id] = {id, leg, contextJson, previous, decision: null}
+        this.requests = JSON.stringify(requests)
+        return JSON.stringify(requests[id])
+    }
+
+    async decide(requestId: string, decisionJson: string): Promise<string> {
+        const requests = JSON.parse(this.requests), request = requests[requestId]
+        if (!request) throw new Error('Unknown planning request')
+        const decision = JSON.parse(decisionJson) as Decision
+        if (decision.request_id !== requestId || decision.leg !== request.leg || !decision.response_id || !decision.model)
+            throw new Error('A Ranger can only decide for its own leg')
+        validateLegPlan(decision.plan)
+        if (request.decision && JSON.stringify(request.decision) !== JSON.stringify(decision)) throw new Error('Conflicting decision retry')
+        request.decision = decision
+        this.requests = JSON.stringify(requests)
+        return JSON.stringify(decision)
+    }
+
+    async inspect(): Promise<string> { return JSON.stringify({activation: this.activation, requests: JSON.parse(this.requests)}) }
+}
+
+function teamCheckpoint(value: string): any {
+    const cp = JSON.parse(value)
+    if (cp.backend !== 'native' || cp.rig || !cp.team || !Number.isSafeInteger(cp.tick) || cp.tick < 0) throw new Error('Invalid team checkpoint')
+    return cp
+}
+
+/** Stores the four proposals and their agreement, without choosing a gait. */
+export class TeamBody extends Actor {
+    @Persisted private record = ''
+    @Ephemeral private activation = crypto.randomUUID()
+
+    async initialize(initial: string): Promise<string> {
+        if (this.record) return this.record
+        const cp = teamCheckpoint(initial)
+        if (cp.tick !== 0 || cp.team.policy) throw new Error('Expected a fresh robot')
+        this.record = JSON.stringify({episode: this.id, revision: 0, checkpoint: initial, pending: null,
+            last_commit: null, draft: null, rounds: [], validation: null, validations: [], agreement: null, stopped: false})
+        return this.record
+    }
+    async inspect(): Promise<string> { if (!this.record) throw new Error('No team episode'); return this.record }
+    async identity(): Promise<string> { return JSON.stringify({activation: this.activation}) }
+
+    async publish(round: number, decisionsJson: string): Promise<string> {
+        const state = JSON.parse(await this.inspect()), decisions = JSON.parse(decisionsJson) as Decision[]
+        validateDecisions(decisions)
+        if (state.agreement || state.stopped || !Number.isInteger(round) || round < 0 || round > 3 ||
+            decisions.some(d => d.request_id !== `${this.id}.${round}.${d.leg}`)) throw new Error('Invalid negotiation round')
+        if (state.draft?.round === round) {
+            if (JSON.stringify(state.draft.decisions) !== JSON.stringify(decisions)) throw new Error('Conflicting draft retry')
+            return this.record
+        }
+        if (round !== (state.draft?.round ?? -1)+1) throw new Error('Negotiation rounds must be consecutive')
+        state.draft = {round, decisions}; state.rounds.push(state.draft)
+        state.validation = null
+        this.record = JSON.stringify(state); return this.record
+    }
+
+    async validate(round: number, resultJson: string): Promise<string> {
+        const state = JSON.parse(await this.inspect()), results = JSON.parse(resultJson)
+        if (state.stopped || state.agreement || state.draft?.round !== round || round < 1) throw new Error('Stale validation')
+        if (!Array.isArray(results) || results.length !== 2) throw new Error('Expected two simulator trials')
+        if (state.validation && JSON.stringify(state.validation.results) !== JSON.stringify(results)) throw new Error('Conflicting validation retry')
+        state.validation = {round, results, accepted: results.every(r => r.healthy && r.speed_m_s > .08)}
+        if (!state.validations.some((v: any) => v.round === round)) state.validations.push(state.validation)
+        this.record = JSON.stringify(state); return this.record
+    }
+
+    async agree(initial: string): Promise<string> {
+        const state = JSON.parse(await this.inspect()), cp = teamCheckpoint(initial)
+        if (state.agreement) {
+            if (state.checkpoint !== initial) throw new Error('Conflicting agreement retry')
+            return this.record
+        }
+        if (state.stopped || state.pending || !state.validation?.accepted || cp.tick !== 0 || !cp.team_controller) throw new Error('Validate reviewed proposals before execution')
+        const policy = Object.fromEntries(state.draft.decisions.map((d: Decision) => [d.leg, d.plan]))
+        for (const leg of LEGS) if (JSON.stringify(cp.team.policy[leg]) !== JSON.stringify(policy[leg])) throw new Error('Executor changed a Ranger decision')
+        state.agreement = state.draft; state.checkpoint = initial
+        this.record = JSON.stringify(state); return this.record
+    }
+
+    async prepare(revision: number): Promise<string> {
+        const state = JSON.parse(await this.inspect())
+        if (state.revision !== revision || !state.agreement || state.stopped) throw new Error('Cannot advance this episode')
+        if (!state.pending) { state.pending = {id: `${this.id}.${revision}`}; this.record = JSON.stringify(state) }
+        return JSON.stringify(state.pending)
+    }
+
+    async commit(id: string, nextCheckpoint: string): Promise<string> {
+        const state = JSON.parse(await this.inspect())
+        if (state.last_commit === id) {
+            if (state.checkpoint !== nextCheckpoint) throw new Error('Conflicting checkpoint retry')
+            return this.record
+        }
+        if (state.pending?.id !== id) throw new Error('No matching reservation')
+        const before = teamCheckpoint(state.checkpoint), after = teamCheckpoint(nextCheckpoint)
+        if (after.tick < before.tick || after.tick > before.tick+5 || JSON.stringify(after.team.policy) !== JSON.stringify(before.team.policy))
+            throw new Error('Invalid execution checkpoint')
+        state.checkpoint = nextCheckpoint; state.revision++; state.last_commit = id; state.pending = null
+        this.record = JSON.stringify(state); return this.record
+    }
+
+    async stop(): Promise<string> {
+        const state = JSON.parse(await this.inspect()); state.stopped = true
+        this.record = JSON.stringify(state); return this.record
+    }
+}
+
+/** Append-only search journal. Physics and provider credentials stay in Python. */
+export class GaitSearch extends Actor {
+    @Persisted private entries = "{}"
+
+    async inspect(): Promise<string> { return this.entries }
+
+    async put(key: string, value: string): Promise<string> {
+        if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(key) || value.length > 2_000_000)
+            throw new Error("Invalid search journal entry")
+        JSON.parse(value)
+        const entries = JSON.parse(this.entries) as Record<string, string>
+        if (Object.hasOwn(entries, key)) {
+            if (entries[key] !== value) throw new Error("Conflicting search journal retry")
+            return value
+        }
+        entries[key] = value
+        this.entries = JSON.stringify(entries)
+        return value
+    }
+}
 
 type Checkpoint = {
     tick: number; backend: string; rig: boolean;

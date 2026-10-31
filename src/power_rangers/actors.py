@@ -101,7 +101,10 @@ class TerseRuntime:
         if not self.process:
             return
         try:
-            os.killpg(self.process.pid, signal.SIGKILL if crash else signal.SIGTERM)
+            # A failed startup may already have reaped Bun. Do not signal its
+            # former process group after the child has exited.
+            if self.process.poll() is None:
+                os.killpg(self.process.pid, signal.SIGKILL if crash else signal.SIGTERM)
         except ProcessLookupError:
             pass
         try:
