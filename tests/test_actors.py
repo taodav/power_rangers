@@ -175,8 +175,9 @@ def test_reactive_goal_changes_and_hold_survive_actor_restart(runtime):
     assert len({m.action_id for m in session.sim.history}) == 12
 
 
-def test_diagonal_pair_reservation_replay_restart_and_stop(runtime):
-    session = ActorSession.create(Simulation(rig=False), runtime, 3, policy='trot', profile='brisk')
+@pytest.mark.parametrize('profile', ['brisk', 'fast'])
+def test_diagonal_pair_reservation_replay_restart_and_stop(runtime, profile):
+    session = ActorSession.create(Simulation(rig=False), runtime, 3, policy='trot', profile=profile)
     session.step()
     assert {i['leg'] for i in session.pending['intents']} == {'FR','RL'}
     first_attempt = session.sim.checkpoint()

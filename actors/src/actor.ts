@@ -1,10 +1,10 @@
 import { Actor, Ephemeral, Persisted } from "terse-sdk/actor"
 
-import { LEGS, propose, selectIntents, validateGoal, type Leg, type Observation, type Intent, type Goal } from "./policy"
+import { LEGS, propose, selectIntents, validateGoal, pairedProfile, type Leg, type Observation, type Intent, type Goal } from "./policy"
 
 type Checkpoint = {
     tick: number; backend: string; rig: boolean;
-    crawl: { external_policy: boolean; phase: string; status: string; completed_steps: number; cycles: number; policy?: string; goal?: Goal; next_pair?: number };
+    crawl: { external_policy: boolean; phase: string; status: string; completed_steps: number; cycles: number; policy?: string; profile?: string; goal?: Goal; next_pair?: number };
     anchors: Record<Leg, number[]>;
     active: { action_id: string; leg: Leg; start_tick: number; deadline_tick: number }[]
 }
@@ -79,6 +79,7 @@ export class Body extends Actor {
         if (revision !== state.revision) throw new Error("Stale Body revision")
         if (state.pending) return JSON.stringify(state.pending)
         const cp = checkpoint(state.checkpoint)
+        const gait = cp.crawl.policy === "trot" ? pairedProfile(cp.crawl.profile) : null
         if (cp.crawl.status !== "running") throw new Error("Episode has ended")
         const intents = JSON.parse(proposals) as Intent[]
         let accepted: Intent[] = []
@@ -103,10 +104,10 @@ export class Body extends Actor {
                     throw new Error("Invalid intent priority")
                 if (intent.target !== undefined && (!Array.isArray(intent.target) || intent.target.length !== 3 ||
                     !intent.target.every(Number.isFinite) ||
-                    Math.hypot(...intent.target.map((v, i) => v - cp.anchors[intent.leg][i])) > .085))
+                    Math.hypot(...intent.target.map((v, i) => v - cp.anchors[intent.leg][i])) > (gait?.workspace ?? .085)))
                     throw new Error("Foot target exceeds step workspace")
-                if (intent.shift_ticks !== undefined && (!Number.isInteger(intent.shift_ticks) || intent.shift_ticks < 20 || intent.shift_ticks > 100) ||
-                    intent.settle_ticks !== undefined && (!Number.isInteger(intent.settle_ticks) || intent.settle_ticks < 5 || intent.settle_ticks > 30))
+                if (intent.shift_ticks !== undefined && (!Number.isInteger(intent.shift_ticks) || intent.shift_ticks < (gait?.shift_ticks ?? 20) || intent.shift_ticks > 100) ||
+                    intent.settle_ticks !== undefined && (!Number.isInteger(intent.settle_ticks) || intent.settle_ticks < (gait?.settle_ticks ?? 5) || intent.settle_ticks > 30))
                     throw new Error("Invalid support-transfer timing")
                 if (cp.crawl.policy === "trot" && intent.kind === "step" &&
                     (!intent.target || intent.duration > .4 || intent.clearance > .04))
@@ -153,7 +154,7 @@ export class Body extends Actor {
         if (!this.record) throw new Error("Body has no episode")
         const state = JSON.parse(this.record) as Session
         const cp = checkpoint(state.checkpoint)
-        const goal = validateGoal(JSON.parse(goalJson), cp.crawl.policy)
+        const goal = validateGoal(JSON.parse(goalJson), cp.crawl.policy, cp.crawl.profile)
         const canonical = JSON.stringify(goal)
         if (state.last_goal_revision === revision && state.last_goal === canonical) return this.record
         if (state.revision !== revision || state.pending) throw new Error("Flush the current round before changing goals")

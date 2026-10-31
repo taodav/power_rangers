@@ -24,12 +24,12 @@
 <div class="actor-top"><div><div class="crawl-title">Durable Rangers <span class="tag">TERSE</span></div><p class="crawl-help">Four Rangers propose footholds from the shared velocity goal. Diagonal partners reserve and swing together while the opposite pair supports the body.</p></div><div class="actor-controls"><button class="primary" id="actorStart">Run with actors</button><button class="ghost" id="actorResume">Resume saved</button><button id="actorRestart" disabled>Restart actors</button><button class="ghost" id="actorRecover" hidden>Recover connection</button></div></div>
 <div class="goal-controls">
 <div><label for="actorPolicy">Leg decisions</label><select id="actorPolicy"><option value="trot" selected>Diagonal pairs</option><option value="reactive">Reactive single leg</option><option value="fixed">Fixed crawl order</option></select></div>
-<div><label for="actorProfile">Motion timing</label><select id="actorProfile"><option value="brisk" selected>Brisk</option><option value="baseline">Baseline</option></select></div>
-<div><label for="goalVx">Forward <output id="goalVxValue">5.0 cm/s</output></label><input id="goalVx" type="range" min="-8" max="8" step="0.2" value="5"></div>
+<div><label for="actorProfile">Motion timing</label><select id="actorProfile"><option value="fast" selected>Fast</option><option value="brisk">Brisk</option><option value="baseline">Baseline</option></select></div>
+<div><label for="goalVx">Forward <output id="goalVxValue">12.0 cm/s</output></label><input id="goalVx" type="range" min="-15" max="15" step="0.2" value="12"></div>
 <div><label for="goalVy">Sideways, left + <output id="goalVyValue">0.0 cm/s</output></label><input id="goalVy" type="range" min="-4" max="4" step="0.2" value="0"></div>
 <div><label for="goalYaw">Turn, left + <output id="goalYawValue">0.0 °/s</output></label><input id="goalYaw" type="range" min="-11" max="11" step="0.5" value="0"></div>
 </div>
-<div class="goal-presets"><button data-goal="1.2,0,0" data-pair="5,0,0">Forward</button><button data-goal="-1.2,0,0" data-pair="-5,0,0">Reverse</button><button data-goal="0,0.8,0" data-pair="0,2.5,0">Side left</button><button data-goal="0,-0.8,0" data-pair="0,-2.5,0">Side right</button><button data-goal="0,0,2" data-pair="0,0,6">Turn left</button><button data-goal="0,0,-2" data-pair="0,0,-6">Turn right</button><button data-goal="0,0,0">Hold</button><button id="applyGoal" class="primary">Apply goal</button></div>
+<div class="goal-presets"><button data-goal="1.2,0,0" data-pair="5,0,0" data-fast="12,0,0">Forward</button><button data-goal="-1.2,0,0" data-pair="-5,0,0" data-fast="-12,0,0">Reverse</button><button data-goal="0,0.8,0" data-pair="0,2.5,0">Side left</button><button data-goal="0,-0.8,0" data-pair="0,-2.5,0">Side right</button><button data-goal="0,0,2" data-pair="0,0,6">Turn left</button><button data-goal="0,0,-2" data-pair="0,0,-6">Turn right</button><button data-goal="0,0,0">Hold</button><button id="applyGoal" class="primary">Apply goal</button></div>
 <p class="crawl-help" id="goalStatus">Choose a goal, then Run with actors. Presets update the next reservation; active feet finish landing together.</p>
 <div class="actor-stats"><span id="actorEpisode">No actor episode</span><span id="actorRevision">—</span><span id="actorClock">100 ms durable windows</span><span id="actorLatency">Local policies · no model calls</span></div>
 <p id="pairStatus" class="crawl-help" role="status"></p><div class="ranger-row" id="rangerIntents"></div><div id="actorRecovery" role="status"></div><div id="actorError" role="alert"></div>
@@ -132,7 +132,7 @@ poll=async function(){
   $('actorProfile').disabled=active;
   $('applyGoal').disabled=commandBusy||!active||!a||a.policy==='fixed'||Boolean(a.error);
   const goal=a?.goal;
-  configureGoalRanges(active && a ? a.policy : $('actorPolicy').value);
+  configureGoalRanges(active && a ? a.policy : $('actorPolicy').value, active && a ? a.profile : $('actorProfile').value);
   const swinging=Object.entries(state.legs).filter(([leg,data])=>data.active).map(([leg])=>leg);
   $('pairStatus').textContent=a?.policy==='trot' ? `${swinging.length ? 'Swinging together: '+swinging.join(' + ') : 'All feet supporting / aligning next pair'} · ${state.crawl.concurrent_air_s.toFixed(2)} s with both partners airborne · peak ${state.crawl.max_concurrent_swings} simultaneous motions` : '';
   const canChooseGoal=active ? a?.policy!=='fixed' : $('actorPolicy').value!=='fixed';
@@ -160,20 +160,26 @@ poll=async function(){
 function goalValues(){return {vx:Number($('goalVx').value)/100,vy:Number($('goalVy').value)/100,yaw_rate:Number($('goalYaw').value)*Math.PI/180};}
 function goalLabels(){for(const id of ['goalVx','goalVy','goalYaw'])$(id+'Value').textContent=Number($(id).value).toFixed(1)+(id==='goalYaw'?' °/s':' cm/s');}
 for(const id of ['goalVx','goalVy','goalYaw'])$(id).oninput=goalLabels;
-function configureGoalRanges(policy){
-  const bounds=policy==='trot'?[8,4,11]:[2.4,1.4,4];
+function configureGoalRanges(policy,profile){
+  const bounds=policy==='trot'?[profile==='fast'?15:8,4,11]:[2.4,1.4,4];
+  $('actorProfile').querySelector('[value=fast]').disabled=policy!=='trot';
   ['goalVx','goalVy','goalYaw'].forEach((id,i)=>{const el=$(id);if(Number(el.max)!==bounds[i]){el.min=-bounds[i];el.max=bounds[i];}});
   goalLabels();
 }
-$('actorPolicy').onchange=()=>{
-  configureGoalRanges($('actorPolicy').value);
-  $('goalVx').value=$('actorPolicy').value==='trot'?5:1.2;
+function setProfileGoal(){
+  const policy=$('actorPolicy').value;
+  if(policy!=='trot' && $('actorProfile').value==='fast')$('actorProfile').value='brisk';
+  configureGoalRanges(policy,$('actorProfile').value);
+  $('goalVx').value=policy==='trot'?($('actorProfile').value==='fast'?12:5):1.2;
   $('goalVy').value=0;$('goalYaw').value=0;goalLabels();poll();
-};
+}
+$('actorPolicy').onchange=setProfileGoal;
+$('actorProfile').onchange=setProfileGoal;
 $('applyGoal').onclick=()=>command({command:'actor_goal',goal:goalValues()});
 document.querySelectorAll('[data-goal]').forEach(button=>button.onclick=()=>{
   const policy=state?.crawl?.status==='running' && state?.actors ? state.actors.policy : $('actorPolicy').value;
-  const values=(policy==='trot' && button.dataset.pair ? button.dataset.pair : button.dataset.goal).split(',');
+  const profile=state?.crawl?.status==='running' && state?.actors ? state.actors.profile : $('actorProfile').value;
+  const values=(policy==='trot' && profile==='fast' && button.dataset.fast ? button.dataset.fast : policy==='trot' && button.dataset.pair ? button.dataset.pair : button.dataset.goal).split(',');
   ['goalVx','goalVy','goalYaw'].forEach((id,i)=>$(id).value=values[i]);goalLabels();
   if(state?.actors && state.actors.policy!=='fixed' && state.crawl.status==='running' && !commandBusy)command({command:'actor_goal',goal:goalValues()});
 });

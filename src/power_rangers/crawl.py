@@ -290,6 +290,9 @@ class CrawlController:
             elif elapsed >= 75:
                 self.fail(sim, "support transfer timed out")
 
+    def body_position_gain(self) -> float:
+        return 60
+
     def apply(self, sim: "Simulation") -> None:
         state = self.state
         com = sim.data.subtree_com[sim.trunk].copy()
@@ -298,7 +301,7 @@ class CrawlController:
         body_target = np.array(state.body_target)
         desired_com = body_target + np.array(state.com_offset)
         mass = sim.model.body_subtreemass[sim.trunk]
-        force = mass * (60 * (desired_com - com) - 15 * velocity - sim.model.opt.gravity)
+        force = mass * (self.body_position_gain() * (desired_com - com) - 15 * velocity - sim.model.opt.gravity)
         rotation = sim.data.xmat[sim.trunk].reshape(3, 3)
         angular_velocity = rotation @ sim.data.qvel[3:6]
         # World-frame rotation error from current orientation to target yaw.

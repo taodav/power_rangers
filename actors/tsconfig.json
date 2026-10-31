@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext", "module": "ESNext", "moduleResolution": "Bundler",
-    "strict": true, "noEmit": true, "skipLibCheck": true,
+    "strict": true, "noEmit": true, "skipLibCheck": true, "resolveJsonModule": true,
     "types": ["bun"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "run.ts", "policy-worker.ts"]

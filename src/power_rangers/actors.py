@@ -276,7 +276,7 @@ class ActorSession:
         self.record = self.runtime.call("Body", self.episode, "requestStop")
 
     def set_goal(self, goal):
-        goal = validate_goal(goal, self.sim.crawl.state.policy)
+        goal = validate_goal(goal, self.sim.crawl.state.policy, self.sim.crawl.state.profile)
         self.flush()
         self.record = self.runtime.call("Body", self.episode, "setGoal", self.record["revision"], encode(goal))
         self.sim.restore(json.loads(self.record["checkpoint"]))

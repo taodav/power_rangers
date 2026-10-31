@@ -2,7 +2,7 @@
 
 Timed leg-motion experiments using MuJoCo Playground's Unitree Go1 model. Four independently controlled legs share one physics simulation and one integer simulation clock.
 
-The current milestone adds **simultaneous diagonal pairs**: front-right + rear-left swing together, followed by front-left + rear-right. Four Ranger actors share velocity goals, paired reservations, landing barriers and durable checkpoints. Single-leg reactive motion and the original scripted crawl remain available for comparison.
+The current milestone adds a **Fast diagonal-pair profile**, measured at about 10.2 cm/s on flat ground. Front-right + rear-left swing together, followed by front-left + rear-right. Four Ranger actors share velocity goals, paired reservations, landing barriers and durable checkpoints. The previous Brisk paired gait, single-leg reactive motion and original scripted crawl remain available for comparison.
 
 ## Run locally
 
@@ -83,13 +83,13 @@ The verified three-cycle actor run completed 12 placements in 29.70 simulated se
 
 ### Simultaneous diagonal pairs
 
-The dashboard now defaults to **Diagonal pairs → Brisk**, with a **5 cm/s** forward goal. Click **Run with actors**. Forward, reverse, sideways, turn and hold presets work during a run. The pair status shows both active legs and accumulated time with both feet actually airborne; the timeline records their shared reservation and individual touchdowns.
+The dashboard now defaults to **Diagonal pairs → Fast**, with a **12 cm/s** forward goal. Click **Run with actors**. Choose **Brisk** to reproduce the earlier 5 cm/s goal. Forward, reverse, sideways, turn and hold presets work during a run. The pair status shows both active legs and accumulated time with both feet actually airborne; the timeline records their shared reservation and individual touchdowns.
 
 The sequence is **FR + RL → FL + RR**. Each Ranger computes its own foothold from the shared body goal and physical observations. Both partners must propose compatible motions at the same Body revision. The Body persists the pair in one reservation; the executor starts both on exactly the same simulation tick after aligning the center of mass with the opposite diagonal. The supporting pair receives the body wrench through the existing joint actuators. This is a conservative, contact-gated paired gait with all-foot intervals, not a flight-phase running gait or a learned coordination policy. The diagonal phase arrangement follows the usual trot pattern (see the [MIT Cheetah controller](https://github.com/mit-biomimetics/Cheetah-Software/blob/master/user/MIT_Controller/Controllers/convexMPC/ConvexMPCLocomotion.cpp)); this implementation uses instantaneous wrench allocation, not that controller's predictive optimization.
 
 Brisk swings have a planned duration of **0.24 s**, with 2.5 cm clearance. Initial support alignment takes at least 0.5 s; subsequent alignment takes at least 0.2 s, extended as needed by measured contact and center-of-mass position. Both feet must confirm touchdown before the next pair can begin. A failed partner terminates the pair. Hold or stop finishes both reserved landings before supporting on all four feet. A midair goal change leaves both existing targets intact. Both motion IDs, targets, progress, deadlines, and the next diagonal phase survive checkpoint recovery.
 
-The UI reports **Diagonal stance** while two feet support the body: a two-foot line has no positive polygon margin. Allowed goals are ±8 cm/s forward, ±4 cm/s sideways and ±0.20 rad/s turning. These are input limits; achievable speed saturates near 5 cm/s in the tested forward configuration. Single-leg mode keeps its previous smaller limits.
+The UI reports **Diagonal stance** while two feet support the body: a two-foot line has no positive polygon margin. Brisk allows goals of ±8 cm/s forward, ±4 cm/s sideways and ±0.20 rad/s turning. Fast raises only the forward/reverse command limit to ±15 cm/s. These are input limits; achievable speed saturates near 5 cm/s for Brisk and 10–11 cm/s for Fast in the tested forward configurations. Single-leg mode keeps its previous smaller limits.
 
 ```bash
 uv run --offline rangers actors --policy trot --profile brisk --vx .05 --cycles 6 --port 0
@@ -108,6 +108,29 @@ Five seeds per case, 24 placements, native physics on flat ground:
 The new default is **3.9×** the previous reactive default. At the same 2.5 cm/s command, paired mode is **2.1×** as fast. These compare complete gait configurations, including shorter swing/transfer timing, rather than isolating concurrency alone. Speeds use simulated time and the same steady-position slope definition below; they do not measure Terse wall-clock throughput.
 
 All **50 paired-suite evaluation runs** completed without falls, including reverse, both sideways directions, both turns and a curved path. Maximum tilt was 6.06° across the suite (3.62° for fast forward). Each fast-forward run measured **2.64 s with both swinging feet simultaneously airborne**. Results are in `artifacts/paired-evaluation.json`; testing covers the flat floor and small initial velocity perturbations. No calibration weld or externally applied body forces are used.
+
+### Fast profile
+
+Fast keeps the same diagonal pairing and landing barriers. It uses a 0.20 s planned swing, 2 cm clearance, up to 13 cm foot displacement (14.5 cm executor validation bound), and a minimum 0.08 s support alignment after the initial 0.5 s alignment. Its all-foot transfer wait is 0.04 s. Contact confirmation and the 1.2 cm center-of-mass distance gate can extend these intervals; shortening a minimum never bypasses those checks. Stronger body-position feedback (100 versus 60) brings the body over the supporting diagonal sooner. The model's torque limits, control limits, masses, friction model, and simulation timestep are unchanged.
+
+Profile limits and timing live in `src/power_rangers/gaits.json`, read by both the TypeScript actors and Python executor. Brisk retains its prior gains, smaller workspace and motion timings. Profile selection is fixed for an episode and saved with its checkpoint. Hold, stop and live goal changes still preserve both in-flight targets.
+
+```bash
+uv run --offline rangers actors --policy trot --profile fast --vx .12 --cycles 6 --port 0
+uv run --offline rangers evaluate --suite speed --seeds 5 --cycles 12
+```
+
+Longer comparison: five seeds × 48 placements per case, same flat-ground perturbations and steady-body speed metric:
+
+| Profile | Forward goal | Measured steady speed |
+| --- | --- | --- |
+| Brisk, previous default | 5 cm/s | 4.834 cm/s |
+| Brisk | 8 cm/s | 4.548 cm/s |
+| Fast | 8 cm/s | 7.968 cm/s |
+| Fast, new default | 12 cm/s | 10.213 cm/s |
+| Fast | 15 cm/s | 10.667 cm/s |
+
+Fast is **2.1× faster** at its new default, and **1.75× faster** at the same 8 cm/s command. All **55 speed-suite runs** completed without falls, covering the comparisons above, reverse, both sideways directions, both turns, and a curved path. Maximum tilt among Fast runs was 2.71° (2.09° for its default forward goal). Reverse averaged −10.70 cm/s and sideways motion approximately ±4 cm/s. These are simulation-time locomotion speeds, not wall-clock playback or RPC throughput. The report `artifacts/speed-evaluation.json` also records time spent aligning, swinging and transferring support.
 
 ### Reactive single-leg velocity goals
 
@@ -212,6 +235,7 @@ The current milestone never reads the key or makes OpenAI requests. When inferen
 - `actors/src/actor.ts`: durable Body arbiter, goal updates and four Ranger actor instances.
 - `actors/src/policy.ts`: shared fixed/reactive/diagonal policies and single/pair arbitration.
 - `trot.py`: simultaneous diagonal swings, two-foot support alignment and paired landing barriers.
+- `gaits.json` / `gaits.py`: shared paired-gait timing, limits and body feedback profiles.
 - `policy.py` / `evaluation.py`: physical observations and reproducible policy comparisons.
 - `server.py` / `dashboard.html`: local interactive controls. All physics mutations happen on the main thread.
 

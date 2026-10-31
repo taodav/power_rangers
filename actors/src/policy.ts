@@ -1,10 +1,11 @@
 /** Pure policy/arbiter used by both real Terse actors and headless evaluations. */
+import pairedProfiles from "../../src/power_rangers/gaits.json"
 export const LEGS = ["FR", "FL", "RR", "RL"] as const
 export type Leg = typeof LEGS[number]
 export const ORDER: Leg[] = ["RL", "FL", "RR", "FR"]
 export const PAIRS: Leg[][] = [["FR", "RL"], ["FL", "RR"]]
 export type Goal = { vx: number; vy: number; yaw_rate: number }
-export type Profile = "baseline" | "brisk"
+export type Profile = "baseline" | "brisk" | "fast"
 export type Policy = "fixed" | "reactive" | "ordered" | "trot"
 export const PROFILES = {
     baseline: { shift_ticks: 60, settle_ticks: 15, duration: .7, clearance: .035 },
@@ -28,8 +29,12 @@ export type Intent = ObservationKey & {
     earliest_tick?: number; valid_until_tick?: number
 }
 type ObservationKey = Pick<Observation, "episode" | "revision" | "tick" | "step">
-export function validateGoal(goal: Goal, policy = "reactive"): Goal {
-    const bounds = policy === "trot" ? [.08, .04, .20] : [.025, .015, .08]
+export function pairedProfile(profile = "brisk") {
+    if (!(profile in pairedProfiles)) throw new Error("Unknown paired motion profile")
+    return pairedProfiles[profile as Profile]
+}
+export function validateGoal(goal: Goal, policy = "reactive", profile = "brisk"): Goal {
+    const bounds = policy === "trot" ? pairedProfile(profile).velocity_limits : [.025, .015, .08]
     if (!goal || ![goal.vx, goal.vy, goal.yaw_rate].every(Number.isFinite) ||
         Math.abs(goal.vx) > bounds[0] || Math.abs(goal.vy) > bounds[1] || Math.abs(goal.yaw_rate) > bounds[2])
         throw new Error(`Goal limits: vx ±${bounds[0]} m/s, vy ±${bounds[1]} m/s, yaw ±${bounds[2]} rad/s`)
@@ -37,7 +42,10 @@ export function validateGoal(goal: Goal, policy = "reactive"): Goal {
 }
 export function propose(leg: Leg, obs: Observation): Intent {
     const policy = obs.policy ?? "fixed"
-    const timing = policy === "trot" ? {shift_ticks: 25, settle_ticks: 5, duration: obs.profile === "baseline" ? .30 : .24, clearance: .025} : PROFILES[obs.profile ?? "baseline"]
+    if (obs.profile === "fast" && policy !== "trot") throw new Error("Fast timing requires diagonal pairs")
+    const gait = policy === "trot" ? pairedProfile(obs.profile ?? "baseline") : null
+    const timing = gait ? {shift_ticks: obs.step === 0 ? gait.initial_shift_ticks : gait.shift_ticks,
+        settle_ticks: gait.settle_ticks, duration: gait.duration, clearance: gait.clearance} : PROFILES[(obs.profile ?? "baseline") as keyof typeof PROFILES]
     if (!timing || !["fixed", "reactive", "ordered", "trot"].includes(policy)) throw new Error("Unknown policy/profile")
     const intent: Intent = {
         episode: obs.episode, revision: obs.revision, tick: obs.tick, step: obs.step,
@@ -48,7 +56,7 @@ export function propose(leg: Leg, obs: Observation): Intent {
         intent.kind = ORDER[obs.step % 4] === leg ? "step" : "wait"
         return intent
     }
-    const goal = validateGoal(obs.goal!, policy)
+    const goal = validateGoal(obs.goal!, policy, obs.profile)
     if (!obs.feet || !obs.center || obs.formation_yaw === undefined || !obs.body) throw new Error("Missing physical observation")
     const foot = obs.feet[leg]
     if (Math.hypot(goal.vx, goal.vy, goal.yaw_rate) < 1e-8) return { ...intent, reason: "Zero velocity goal; maintain support" }
@@ -56,7 +64,7 @@ export function propose(leg: Leg, obs: Observation): Intent {
         return { ...intent, reason: "Waiting for planted feet and body stability" }
     const slotSeconds = timing.shift_ticks * .02 + timing.duration + timing.settle_ticks * .02 + .18
     // Preview a body pose. Each leg independently corrects its placement toward it.
-    const horizon = policy === "trot" ? .9 : 2.5 * slotSeconds
+    const horizon = gait ? gait.preview_seconds : 2.5 * slotSeconds
     const yaw = obs.reference_yaw ?? obs.formation_yaw
     const center = obs.reference_center?.length === 2 ? obs.reference_center : obs.center
     const c = Math.cos(yaw), s = Math.sin(yaw)
@@ -69,7 +77,7 @@ export function propose(leg: Leg, obs: Observation): Intent {
     ]
     const delta = target.map((x, i) => x - foot.position[i])
     const error = Math.hypot(delta[0], delta[1])
-    const scale = Math.min(1, .07 / Math.max(error, 1e-9))
+    const scale = Math.min(1, (gait?.step_limit ?? .07) / Math.max(error, 1e-9))
     intent.target = foot.position.map((x, i) => x + delta[i] * scale)
     intent.forward = 0
     // Placement error, waiting age, and the body shift required to unload this leg.
@@ -100,7 +108,8 @@ export function selectIntents(intents: Intent[], policy = "reactive", nextPair =
     const chosen = pair.map(leg => intents.find(i => i.leg === leg && i.kind === "step"))
     if (chosen.some(i => !i)) return []
     const result = chosen as Intent[]
-    if (result[0].duration !== result[1].duration || result[0].clearance !== result[1].clearance)
+    if (result[0].duration !== result[1].duration || result[0].clearance !== result[1].clearance ||
+        result[0].shift_ticks !== result[1].shift_ticks || result[0].settle_ticks !== result[1].settle_ticks)
         throw new Error("Diagonal partners disagree on timing")
     return result
 }

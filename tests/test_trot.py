@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pytest
 
-from power_rangers.evaluation import PAIRED_SCENARIOS, rollout
+from power_rangers.evaluation import PAIRED_SCENARIOS, FAST_SCENARIOS, rollout
 from power_rangers.policy import LocalPolicies, configure
 from power_rangers.simulation import Simulation
 from power_rangers.trot import PAIRS, TrotController
@@ -17,10 +17,10 @@ def policies():
     worker.close()
 
 
-def make(cycles=3):
+def make(cycles=3, profile='brisk'):
     sim = Simulation(rig=False)
     sim.start_crawl(cycles, external_policy=True)
-    configure(sim, 'trot', 'brisk')
+    configure(sim, 'trot', profile)
     return sim
 
 
@@ -85,8 +85,9 @@ def test_paired_goals_move_actual_body(policies, scenario, metric, sign, minimum
         assert report['steady_velocity_world_m_s'][0] > .04
 
 
-def test_midair_pair_checkpoint_and_goal_change_preserve_both_targets(policies):
-    sim = make()
+@pytest.mark.parametrize('profile', ['brisk', 'fast'])
+def test_midair_pair_checkpoint_and_goal_change_preserve_both_targets(policies, profile):
+    sim = make(profile=profile)
     airborne_pair(sim, policies)
     targets = {l:list(m.target) for l,m in sim.active.items()}
     sim.crawl.state.goal = {'vx':0.,'vy':0.,'yaw_rate':.12}
@@ -106,8 +107,9 @@ def test_midair_pair_checkpoint_and_goal_change_preserve_both_targets(policies):
 
 
 @pytest.mark.parametrize('stop', [True, False])
-def test_stop_or_hold_waits_for_both_landings(policies, stop):
-    sim = make()
+@pytest.mark.parametrize('profile', ['brisk', 'fast'])
+def test_stop_or_hold_waits_for_both_landings(policies, stop, profile):
+    sim = make(profile=profile)
     airborne_pair(sim, policies)
     ids = {m.action_id for m in sim.active.values()}
     if stop:
@@ -152,3 +154,37 @@ def test_incomplete_or_wrong_pair_is_rejected_without_mutation(legs):
     with pytest.raises(ValueError, match='complete next diagonal'):
         sim.crawl.reserve_batch(sim, intents)
     assert sim.checkpoint() == saved
+
+
+@pytest.mark.parametrize('scenario', list(FAST_SCENARIOS))
+def test_fast_profile_completes_longer_runs_and_improves_speed(policies, scenario):
+    report = rollout(policies, 'trot', 'fast', FAST_SCENARIOS[scenario], seed=7, cycles=12)
+    assert report['status'] == 'completed', report['reason']
+    assert report['completed_steps'] == 48 and report['max_concurrent_swings'] == 2
+    assert report['concurrent_air_s'] > 3
+    assert not report['fallen'] and report['max_tilt_deg'] < 5
+    assert not report['calibration_rig'] and not report['external_forces']
+    if scenario == 'forward_fast':
+        assert report['steady_velocity_world_m_s'][0] > .095
+    elif scenario == 'reverse_fast':
+        assert report['steady_velocity_world_m_s'][0] < -.095
+    elif scenario == 'side_left_fast':
+        assert report['steady_velocity_world_m_s'][1] > .03
+    elif scenario == 'side_right_fast':
+        assert report['steady_velocity_world_m_s'][1] < -.03
+    elif scenario in ('left_turn_fast','right_turn_fast'):
+        assert report['yaw_deg'] * (1 if scenario == 'left_turn_fast' else -1) > 60
+
+
+def test_fast_limits_do_not_expand_brisk_workspace_or_other_policies():
+    from power_rangers.policy import validate_goal
+    goal = {'vx':.12,'vy':0.,'yaw_rate':0.}
+    with pytest.raises(ValueError): validate_goal(goal, 'trot', 'brisk')
+    assert validate_goal(goal, 'trot', 'fast') == goal
+    with pytest.raises(ValueError): configure(make(), 'reactive', 'fast')
+    sim = make()
+    intents = [dict(leg=l,id=l,target=(sim.foot(l)+[.12,0,0]).tolist(),duration=.20,clearance=.02) for l in PAIRS[0]]
+    with pytest.raises(ValueError, match='workspace'): sim.crawl.reserve_batch(sim, intents)
+    sim = make(profile='fast')
+    sim.crawl.reserve_batch(sim, intents)
+    assert sim.crawl.state.selected_legs == list(PAIRS[0])

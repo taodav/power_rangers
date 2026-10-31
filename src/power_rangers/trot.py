@@ -9,6 +9,7 @@ import math
 import numpy as np
 
 from .crawl import CrawlController
+from .gaits import paired_profile
 from .model import LEGS
 from .motions import smoothstep
 
@@ -16,6 +17,9 @@ PAIRS = (("FR", "RL"), ("FL", "RR"))
 
 
 class TrotController(CrawlController):
+    def body_position_gain(self):
+        return paired_profile(self.state.profile)['body_kp']
+
     def _begin_shift(self, sim, center=False):
         if center:
             self.state.selected_legs = []
@@ -24,6 +28,7 @@ class TrotController(CrawlController):
 
     def reserve_batch(self, sim, intents):
         state = self.state
+        gait = paired_profile(state.profile)
         if state.phase != "awaiting_decision" or sim.active:
             raise ValueError("Executor is not awaiting a pair decision")
         expected = set(PAIRS[state.next_pair])
@@ -32,7 +37,7 @@ class TrotController(CrawlController):
         for intent in intents:
             target = np.asarray(intent.get('target'), dtype=float)
             if (target.shape != (3,) or not np.isfinite(target).all()
-                    or np.linalg.norm(target - sim.foot(intent['leg'])) > .085):
+                    or np.linalg.norm(target - sim.foot(intent['leg'])) > gait['workspace']):
                 raise ValueError("Foot target exceeds pair workspace")
             if not (.2 <= intent['duration'] <= .4 and .015 <= intent['clearance'] <= .04):
                 raise ValueError("Invalid paired swing timing/clearance")
@@ -52,7 +57,8 @@ class TrotController(CrawlController):
         state.yaw_origin = 2 * math.atan2(state.quaternion[3], state.quaternion[0])
         yaw = self.formation(sim)[1]
         state.yaw_target = state.yaw_origin + float(np.clip(math.atan2(math.sin(yaw-state.yaw_origin), math.cos(yaw-state.yaw_origin)), -.08, .08))
-        state.shift_ticks = 25 if state.completed_steps == 0 else 10
+        state.shift_ticks = gait['initial_shift_ticks'] if state.completed_steps == 0 else gait['shift_ticks']
+        state.settle_ticks = gait['settle_ticks']
         self._event(sim, 'pair_shift')
 
     def prepare(self, sim):
@@ -93,7 +99,7 @@ class TrotController(CrawlController):
                 self.fail(sim, 'diagonal support alignment timed out')
         elif state.phase == 'pair_touchdown':
             state.ready_ticks = state.ready_ticks+1 if all(sim.contacts().values()) else 0
-            if elapsed >= 4 and state.ready_ticks >= 2:
+            if elapsed >= paired_profile(state.profile)['settle_ticks'] and state.ready_ticks >= 2:
                 state.selected_legs = []
                 state.selected_leg = None
                 if state.stop_requested or state.completed_steps >= state.cycles*4:

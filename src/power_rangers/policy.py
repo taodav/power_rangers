@@ -9,23 +9,25 @@ import numpy as np
 
 from .model import LEGS
 from .motions import CONTROL_DT
+from .gaits import paired_profile
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def validate_goal(goal, policy='reactive'):
+def validate_goal(goal, policy='reactive', profile='brisk'):
     if not isinstance(goal, dict) or set(goal) != {'vx', 'vy', 'yaw_rate'}:
         raise ValueError('A goal needs vx, vy and yaw_rate')
-    bounds = [('vx', .08), ('vy', .04), ('yaw_rate', .20)] if policy == 'trot' else [('vx', .025), ('vy', .015), ('yaw_rate', .08)]
+    bounds = list(zip(('vx','vy','yaw_rate'), paired_profile(profile)['velocity_limits'])) if policy == 'trot' else [('vx', .025), ('vy', .015), ('yaw_rate', .08)]
     if any(type(goal[k]) not in (int, float) or not math.isfinite(goal[k]) or abs(goal[k]) > bound for k, bound in bounds):
         raise ValueError(f'Goal exceeds {policy} limits: {dict(bounds)}')
     return dict(goal)
 
 
 def configure(sim, policy='reactive', profile='brisk', goal=None):
-    if policy not in ('fixed', 'reactive', 'ordered', 'trot') or profile not in ('baseline', 'brisk'):
+    if (policy not in ('fixed', 'reactive', 'ordered', 'trot') or profile not in ('baseline', 'brisk', 'fast')
+            or profile == 'fast' and policy != 'trot'):
         raise ValueError('Unknown policy/profile')
-    goal = validate_goal(goal or {'vx': .05 if policy == 'trot' else .012, 'vy': 0., 'yaw_rate': 0.}, policy)
+    goal = validate_goal(goal or {'vx': paired_profile(profile)['default_vx'] if policy == 'trot' else .012, 'vy': 0., 'yaw_rate': 0.}, policy, profile)
     if policy == 'trot':
         from .trot import TrotController
         sim.crawl = TrotController(sim, saved=sim.crawl.snapshot())

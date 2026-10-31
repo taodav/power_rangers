@@ -1,6 +1,7 @@
 """Reproducible flat-ground policy comparisons using the real policy and physics."""
 import json
 import time
+from collections import Counter
 from pathlib import Path
 from statistics import mean
 
@@ -30,6 +31,17 @@ PAIRED_SCENARIOS = {
     'curve_fast': {'vx': .04, 'vy': 0., 'yaw_rate': .10},
 }
 
+FAST_SCENARIOS = {
+    'forward_fast': {'vx': .12, 'vy': 0., 'yaw_rate': 0.},
+    'forward_limit': {'vx': .15, 'vy': 0., 'yaw_rate': 0.},
+    'reverse_fast': {'vx': -.12, 'vy': 0., 'yaw_rate': 0.},
+    'side_left_fast': {'vx': 0., 'vy': .04, 'yaw_rate': 0.},
+    'side_right_fast': {'vx': 0., 'vy': -.04, 'yaw_rate': 0.},
+    'left_turn_fast': {'vx': 0., 'vy': 0., 'yaw_rate': .20},
+    'right_turn_fast': {'vx': 0., 'vy': 0., 'yaw_rate': -.20},
+    'curve_fast': {'vx': .08, 'vy': 0., 'yaw_rate': .12},
+}
+
 
 def rollout(worker, policy, profile, goal, seed, cycles=6):
     sim = Simulation(rig=False)
@@ -39,12 +51,15 @@ def rollout(worker, policy, profile, goal, seed, cycles=6):
     started = time.perf_counter()
     samples = []
     decisions, holds = 0, 0
+    phase_ticks = Counter()
     for _ in range(cycles * 1200 + 300):
         if sim.crawl.state.phase == 'awaiting_decision':
             decision = worker.decide(sim)
             decisions += 1
             holds += int(decision['intent'] is None)
+        phase, tick = sim.crawl.state.phase, sim.tick
         sim.step()
+        phase_ticks[phase] += sim.tick - tick
         if 4 <= sim.crawl.state.completed_steps < cycles * 4:
             samples.append((sim.tick * .02, *sim.data.qpos[:2]))
         if sim.crawl.state.status != 'running':
@@ -56,6 +71,7 @@ def rollout(worker, policy, profile, goal, seed, cycles=6):
         trajectory = np.array(samples)
         velocity = np.polyfit(trajectory[:, 0] - trajectory[0, 0], trajectory[:, 1:], 1)[0].tolist()
     report.update(seed=seed, fallen=sim.fallen, decision_rounds=decisions, holds=holds,
+                  phase_seconds={phase:ticks*.02 for phase,ticks in phase_ticks.items()},
                   steady_velocity_world_m_s=velocity,
                   wall_seconds=time.perf_counter()-started,
                   step_order=[m.leg for m in sim.history],
@@ -72,7 +88,12 @@ def evaluate(output: Path, seeds=5, cycles=6, suite='reactive'):
     worker = LocalPolicies()
     results = []
     cases = []
-    if suite == 'paired':
+    if suite == 'speed':
+        cases = [('forward_previous', 'trot', 'brisk', PAIRED_SCENARIOS['forward_fast']),
+                 ('forward_same_goal', 'trot', 'brisk', {'vx':.08,'vy':0.,'yaw_rate':0.}),
+                 ('forward_same_goal', 'trot', 'fast', {'vx':.08,'vy':0.,'yaw_rate':0.})]
+        cases.extend((name,'trot','fast',goal) for name,goal in FAST_SCENARIOS.items())
+    elif suite == 'paired':
         # Retain the previous default and compare both gaits at the same higher
         # goal as well as the new pair controller's faster default.
         cases = [('forward', 'reactive', 'brisk', SCENARIOS['forward'])]

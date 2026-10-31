@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "duration": 0.30, "clearance": 0.025,
+    "initial_shift_ticks": 25, "shift_ticks": 10, "settle_ticks": 4,
+    "step_limit": 0.07, "workspace": 0.085, "preview_seconds": 0.9,
+    "body_kp": 60, "default_vx": 0.05, "velocity_limits": [0.08, 0.04, 0.20]
+  },
+  "brisk": {
+    "duration": 0.24, "clearance": 0.025,
+    "initial_shift_ticks": 25, "shift_ticks": 10, "settle_ticks": 4,
+    "step_limit": 0.07, "workspace": 0.085, "preview_seconds": 0.9,
+    "body_kp": 60, "default_vx": 0.05, "velocity_limits": [0.08, 0.04, 0.20]
+  },
+  "fast": {
+    "duration": 0.20, "clearance": 0.02,
+    "initial_shift_ticks": 25, "shift_ticks": 4, "settle_ticks": 2,
+    "step_limit": 0.13, "workspace": 0.145, "preview_seconds": 0.9,
+    "body_kp": 100, "default_vx": 0.12, "velocity_limits": [0.15, 0.04, 0.20]
+  }
+}
