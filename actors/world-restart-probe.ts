@@ -38,14 +38,20 @@ try {
     before.push(await call(ids[i],'confirmDock',[1,...RANGERS[i].dock]));
     physicsBefore.push(await call(ids[i],'authorizePhysics',[JSON.stringify({sequence:1,swing:'left',tilt:3,leftContact:true,rightContact:true})]));
   }
+  const deliveries:string[]=[];
+  for(let i=0;i<4;i++){
+    await call(ids[i],'authorizeDelivery',[JSON.stringify({jobId:`job-${i}`,slot:i,objectId:`box-${i}`,destination:[1,0,.5],tolerance:.05})]);
+    deliveries.push(JSON.stringify(await call(ids[i],'recordPlacement',[JSON.stringify({jobId:`job-${i}`,objectId:`box-${i}`,evidence:'measured',released:true,supported:true,settled:true,position:[1,0,.51],simulationTime:12.5})])));
+  }
   await runtime!.stop();runtime=undefined;await start();
   const after:Record<string,unknown>[]=[];for(const id of ids)after.push(await call(id,'inspect'));
   if(timedOut||before.some((m,i)=>durable(m)!==durable(after[i])))throw new Error('Durable record mismatch after runtime restart');
   if(after.some((m,i)=>m.activation===before[i].activation)||new Set(after.map(m=>m.activation)).size!==4)throw new Error('Probe did not observe four new actor activations');
+  for(let i=0;i<4;i++)if(JSON.stringify(await call(ids[i],'inspectDelivery'))!==deliveries[i])throw new Error('A delivery receipt did not survive restart');
   for(let i=0;i<4;i++)if(JSON.stringify(await call(ids[i],'inspectPhysics'))!==JSON.stringify(physicsBefore[i]))throw new Error('Owned physics authorization did not survive restart');
   for(let i=0;i<4;i++){
     const next=await call(ids[i],'decide',[JSON.stringify({epoch:2,sequence:2,mode:'roam',x:0,z:0})]);
     if(next.sequence!==2||next.decisions!==2||next.docked)throw new Error('Restored actor could not continue its sequence');
   }
-  console.log('PASS: 4 actor records, docking receipts, and owned physics plans survived a full local-runtime stop/start; 4 activations changed; all 4 continued with decision 2.');
+  console.log('PASS: 4 actor records, docking receipts, delivery receipts, and owned physics plans survived a full local-runtime stop/start; 4 activations changed; all 4 continued with decision 2.');
 } finally {clearTimeout(deadline);await runtime?.stop();}

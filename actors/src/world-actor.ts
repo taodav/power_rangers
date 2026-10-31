@@ -1,14 +1,40 @@
 import {Actor, Persisted, Ephemeral} from "terse-sdk/actor";
 import {waypoint, validateRequest, type PlanRequest} from "./world-policy";
+import {EMPTY_DELIVERY, authorize, failDelivery, recordPlacement, type DeliveryRecord} from "./delivery-policy";
 
 type Memory = {slot:number; seed:number; decisions:number; epoch:number; sequence:number; input:string;
   mode:"roam"|"assemble"; target:number[]; docked:boolean};
+
+const readDelivery = (saved:string):DeliveryRecord => saved ? JSON.parse(saved) : EMPTY_DELIVERY;
 
 /** One real, independently persisted actor for each complete robot. */
 export class WorldRanger extends Actor {
   @Persisted private record = "";
   @Ephemeral private activation = crypto.randomUUID();
   @Persisted private physicsRecord = "";
+  @Persisted private deliveryRecord = "";
+
+  /** Durably authorize one named object and destination for this Ranger's own hardware. */
+  async authorizeDelivery(input:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    this.deliveryRecord=JSON.stringify(authorize(readDelivery(this.deliveryRecord),JSON.parse(this.record).slot,input));
+    return this.deliveryRecord;
+  }
+
+  /** Close the job only with a measured receipt from the native adapter, under the same job ID. */
+  async recordPlacement(input:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    this.deliveryRecord=JSON.stringify(recordPlacement(readDelivery(this.deliveryRecord),input));
+    return this.deliveryRecord;
+  }
+
+  async failDelivery(jobId:string, reason:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    this.deliveryRecord=JSON.stringify(failDelivery(readDelivery(this.deliveryRecord),jobId,reason));
+    return this.deliveryRecord;
+  }
+
+  async inspectDelivery(): Promise<string> {return JSON.stringify(readDelivery(this.deliveryRecord));}
 
   async authorizePhysics(input:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
