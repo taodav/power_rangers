@@ -1,5 +1,5 @@
 import {describe,test,expect} from 'bun:test';
-import {builderPose,builderProgress,isDelivered,placementError} from '../world/builder-view.js';
+import {builderPose,builderProgress,isDelivered,placementError,worldPoint} from '../world/builder-view.js';
 
 const JOB='job-1';
 const placedReceipt={event:'placed',job_id:JOB,object_id:'cargo-0',owner_slot:0,destination_id:'station-1',tick:7421,time:14.8,evidence:'measured',settled_samples:50,position:[.9287,.8298,.99],target:[.93,.83,.99],support_force:1.1772,linear_speed:0,tilt_deg:0,fingers_open:true,robot_contact:false,positioned:true,valid:true};
@@ -64,6 +64,9 @@ describe('placing the physical body in the world',()=>{
   });
   test('turning left in physics turns toward +x in the world',()=>{
     const half=Math.SQRT1_2;expect(builderPose({body:[0,0,.9,half,0,0,half]}).yaw).toBeCloseTo(Math.PI/2);
+  });
+  test('measured positions land where the rig draws them',()=>{
+    const p=worldPoint([.93,.83,.99]);expect(p.x).toBeCloseTo(1.992);expect(p.y).toBeCloseTo(2.526);expect(p.z).toBeCloseTo(2.232);
   });
   test('placement error needs both positions',()=>{
     expect(placementError({position:[1,0,0],target:[1,0,.002]})).toBeCloseTo(2);expect(placementError({position:[1,0,0]})).toBe(null);expect(placementError(undefined)).toBe(null);

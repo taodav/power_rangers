@@ -10,7 +10,7 @@ const SPLIT_PHASES = new Set(['roaming', 'rendezvous']);
 const CHASE = {
   mega: {offset: new THREE.Vector3(2.2, 6.3, -9.2), look: new THREE.Vector3(.2, 3.9, 7), fov: 54, wideFov: 68},
   // On the same side as the two stands, looking across them, so the Ranger's body never hides the box.
-  bench: {offset: new THREE.Vector3(9.6, 4.6, -2.4), look: new THREE.Vector3(.9, 2.5, 1.1), fov: 42, wideFov: 58},
+  bench: {offset: new THREE.Vector3(8.4, 4.5, -2.2), look: new THREE.Vector3(1.1, 2.75, 1.25), fov: 38, wideFov: 54},
   ranger: {offset: new THREE.Vector3(1.05, 3.4, -6.4), look: new THREE.Vector3(0, 1.85, 5), fov: 56, wideFov: 68},
 };
 const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
