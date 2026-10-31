@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f1e9">
+  <title>Ranger World — Assembly Grounds</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23243831'/%3E%3Cpath d='M23 6 12 23h8l-3 11 12-19h-9z' fill='%23e9bd63'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <script type="importmap">{"imports":{"three":"/vendor/three.module.js","three/addons/controls/OrbitControls.js":"/vendor/OrbitControls.js"}}</script>
+</head>
+<body>
+  <header class="masthead"><a class="brand" href="/" aria-label="Ranger World home"><span class="brand-icon">ϟ</span><span>RANGER WORLD<small>ASSEMBLY GROUNDS</small></span></a><div class="runtime"><i id="connection-dot"></i><span id="connection">Connecting to local Terse</span><span class="local-tag">LOCAL</span></div></header>
+  <main>
+    <section class="intro"><div><div class="eyebrow">EXPERIMENT 02 <span>/</span> DISTRIBUTED MACHINES</div><h1>Four minds. <em>One mighty machine.</em></h1><p>Independent Rangers. Shared purpose. Watch the team become something bigger.</p></div><div class="intro-mark" aria-hidden="true"><b>04</b><span>RANGERS<br>ONE TEAM</span></div></section>
+    <div id="error" class="error" role="alert" hidden></div>
+    <div class="workspace">
+      <section class="arena" aria-label="Interactive three-dimensional Ranger world">
+        <div class="arena-top"><div class="world-title"><span class="live-dot"></span> ASSEMBLY ISLAND <span class="sector">SECTOR 01</span></div><span class="sim-time" id="sim-time">00:00.0</span></div>
+        <div id="viewport"><div class="loading" id="loading">Waking up the island…</div><div class="scene-caption"><span id="scene-state">FOUR INDEPENDENT RANGERS</span><small id="scene-detail">Each robot owns its own durable planner.</small></div></div>
+        <div class="camera-tools"><span>DRAG TO ORBIT · SCROLL TO ZOOM</span><div><button id="frame-team" class="quiet">↗ Frame team</button><button id="frame-core" class="quiet">◎ Assembly view</button></div></div>
+        <div class="mission-bar"><div><span class="eyebrow">TEAM STATUS</span><h2 id="phase-title">Independent patrol</h2><p id="phase-description">Four robots exploring their own corners of the world.</p></div><div class="actions"><button id="pause" class="secondary" disabled>Ⅱ Pause</button><button id="assemble" class="primary" disabled>Assemble team <span>↗</span></button><button id="patrol" class="secondary" hidden>Patrol as one</button></div></div>
+        <div class="assembly-track" aria-label="Assembly progress"><div id="progress-fill"></div><span data-stage="roaming">01 <b>Explore</b></span><span data-stage="rendezvous">02 <b>Rendezvous</b></span><span data-stage="assembling">03 <b>Transform</b></span><span data-stage="combined">04 <b>Megazord</b></span></div>
+      </section>
+      <aside class="team-panel"><div class="panel-heading"><div><span class="eyebrow">THE SQUAD</span><h2>Four actors. All present.</h2></div><span class="count" id="actor-count">0/4</span></div><div id="ranger-cards"></div><div class="core-note"><span class="core-symbol">✧</span><div><strong>A shared core, not a fifth actor.</strong><p>The torso and head connect four independently owned robot modules.</p></div></div><div class="persistence-note"><span>◉</span><p><b>Real local Terse actors.</b> Every waypoint and docking receipt is persisted. Roaming and assembly are kinematic; combined walking uses MuJoCo. Numeric planners, not LLMs.</p></div></aside>
+    </div>
+    <section class="activity"><div class="activity-header"><div><span class="eyebrow">LIVE TELEMETRY</span><h2>Small decisions. <span>Big coordination.</span></h2></div><div class="activity-stats"><span><b id="decisions">0</b> SAVED DECISIONS</span><span><b id="docked">0 / 4</b> DOCKING RECEIPTS</span></div></div><div id="event-log" role="log" aria-label="Live actor activity"><div class="empty-log">Waiting for the first actor decision…</div></div></section>
+    <footer><span>BUILT ON DAVID’S POWER RANGERS · LOCAL DURABLE ACTORS</span><span>Visual assembly · Native MuJoCo walking rig · Numeric control, no model calls</span></footer>
+  </main>
+  <script type="module" src="/world.js"></script>
+</body>
+</html>

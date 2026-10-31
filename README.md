@@ -1,5 +1,69 @@
 # Power Rangers
 
+## Independent physical Ranger bench
+
+The next robotics milestone is an independent humanoid that walks and picks up objects through actuated gripper contact. A **headless one-Ranger proof now walks, grasps a free box, lifts it from a visible waist-high stand, and carries it for two steps**. It is not yet the four-builder browser mode or connected to a durable job actor. Physical stacking and floor pickup remain future work. See [the measured result and run instructions](physics/RANGER-STATUS.md).
+
+## New: four-Ranger assembly world
+
+A separate, lightweight Three.js world now sits alongside David's original Go1 motion lab. Four complete, articulated Ranger-style robots roam their own parts of a small island, rendezvous, and visibly fold into a Megazord's four limbs. The shared torso and head are passive geometry, **not a fifth actor**. The same four actor identities survive assembly and separation.
+
+```bash
+bun install --frozen-lockfile --ignore-scripts
+(cd actors && bun install --frozen-lockfile --ignore-scripts)
+python3 -I -B run_world.py --bun "$HOME/.bun/bin/bun"
+```
+
+Open **http://127.0.0.1:8771**. The visual world needs Bun 1.4.2+ and Python 3.12+, but not Playground, JAX, uv, API keys, or a hosted Terse account. **Walk in MuJoCo** additionally needs the repo-local physics dependencies below. The original motion lab remains separate and unchanged. Use `--port` and `--actor-port` to choose other unused loopback ports. Ctrl-C stops the world and its owned workers.
+
+- **Ember / Cobalt** become the left / right arms; **Sol / Jade** become the left / right legs.
+- Each real local `WorldRanger` Terse actor persists its own hardware slot, random seed, ordered decision record, waypoint, decision count, and docking receipt. A single world writer executes bounded movement and waits for all four receipts before assembly.
+- **Assemble team** recalls the Rangers. Watch their original meshes fold and move on magnetic assembly rails; no replacement giant robot is substituted.
+- **Walk in MuJoCo**, **Finish & hold**, **Separate team**, **Pause**, orbit/zoom, camera presets, and clickable Ranger cards are available. The live activity feed reports actual planner, assembly, and physical step events.
+- The launcher gives Bun an explicit environment and an isolated HOME. Terse's pinned local-runtime installer may download its checksummed native runtime on first launch. New actor data is under ignored `.cache/world/actors-<actor-port>/` so separate local previews do not share an active database directory; older previews used `.cache/world/actors/`. The download cache is inside `.cache/world/home/`. There is no host sandbox claim.
+
+### Joint-driven combined walking
+
+The original procedural model now has tighter shoulders, hips, and neck, with visible docking collars. After assembly, **Walk in MuJoCo** enters an explicitly labeled, simplified physical rig. That view renders actual MuJoCo geometry poses: a free-root biped with 12 leg joints and 4 arm joints, gravity, ground contact, torque-limited servos, and non-adjacent self-contact. The old scripted combined root path has been removed.
+
+The same four Terse actors persist a fresh owned-limb plan before each step: two arm-balance targets, one stepping leg, and one supporting leg. A shared numeric IK/contact controller executes those bounded intents at 100 Hz; the physics integrator runs at 500 Hz. The simulation clock waits while all four authorizations arrive. This is distributed intent ownership with shared low-level balance—not four independent torque-level brains.
+
+Each counted step requires measured airborne time, more than 2 cm sole-center clearance, forward foot travel, and renewed ground contact. **Finish & hold** completes the current step; **Pause** freezes at a control-batch boundary. The straight-walk demo stops requesting steps after 2.5 m forward travel and has a five-minute worker lifetime. It is not a turning/navigation policy yet.
+
+New native runs use the **Brisk** gait: a 1.5-second weight-shift trajectory instead of 2 seconds, with the original 1.4-second swing, landing checks, motor limits and physics clock unchanged. In three matched 80-second flat-ground trials, mean steady speed improved from **2.98 to 3.51 cm/s** (about **18%**), with no falls. These are small initial-condition variations, not arbitrary-terrain evidence. The previous **Cautious** profile remains available to the headless runner with `--gait cautious`. If this backend is already running, **Separate team → Assemble team → Walk in MuJoCo** creates a fresh worker using the updated gait; an existing worker keeps its original code.
+
+On the shared development Mac, the current permission gate is load1 < 100 and swap ≤ 10 GiB; CPU trials are serial, capped at five minutes, and stop if the host stalls. After an admitted process/headroom check, install only local binary wheels:
+
+```bash
+python3 -I -B -m venv .venv
+.venv/bin/python -I -B -m pip --isolated --disable-pip-version-check install \
+  --only-binary=:all: --keyring-provider disabled -r physics/requirements.txt
+```
+
+For agent-run installation, use the explicit isolated environment in `physics/STATUS.md`, not the interactive shell's environment. Restart the world server after installation or a backend update. An older running server can still display the tighter visual model, but cannot provide the new MuJoCo action until restarted.
+
+### What this prototype does—and does not—prove
+
+**Independent roaming, transformation, docking, and separation in this browser world are still kinematic.** Combined walking is now real MuJoCo locomotion on a simplified flat-ground biped rig, not yet the exact decorative Ranger meshes converted into one continuous physical mechanism. Entering that rig initializes a separate physics episode; leaving it returns to the visual assembly rails. Autonomous physical docking, terrain navigation, learned control, and integrating the independent Ranger bench into this world remain future work. The planners are numeric; there are **no model calls**. Coordination uses the local world barrier and Terse RPC, not Inkwell or Agent Relay.
+
+Actor records are durable, but world poses, simulation time, and the last 120 log events are in application memory. A launcher restart deliberately creates a new episode with four new actor IDs; it does **not** resume the physical world. An uncertain actor outcome freezes the world rather than guessing or retrying a possibly committed decision. The untouched original Go1 lane below has a separate, more complete physics-checkpoint design.
+
+Bounded checks for this new mode (do not run concurrently with the simulator):
+
+```bash
+bun --no-env-file test actors/world.test.ts
+bun --no-env-file actors/node_modules/typescript/bin/tsc -p actors/tsconfig.world.json
+python3 -I -B tests/test_world_launcher.py
+python3 -I -B tests/test_physics_admission.py
+python3 -I -B physics/run_bounded.py --test
+```
+
+The actor unit tests use a mock SDK and do not prove persistence. Live browser, native walking, and real-runtime restart evidence is documented in `physics/STATUS.md`; the original visual-only packet remains in `world/VALIDATION.md`.
+
+---
+
+## Original Go1 motion lab
+
 Four AI actors control one MuJoCo Go1 through shared local Terse state. Each Ranger owns one leg's timing and foot-placement policy. The demo shows their proposals, peer review, measured trials, and overlapping movement.
 
 ## Run the demo
