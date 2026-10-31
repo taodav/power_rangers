@@ -1,11 +1,11 @@
 import {Actor, Persisted, Ephemeral} from "terse-sdk/actor";
 import {waypoint, validateRequest, type PlanRequest} from "./world-policy";
-import {EMPTY_DELIVERY, authorize, failDelivery, recordPlacement, type DeliveryRecord} from "./delivery-policy";
+import {authorize, cancel, confirm, type DeliveryRecord} from "./delivery-policy";
 
 type Memory = {slot:number; seed:number; decisions:number; epoch:number; sequence:number; input:string;
   mode:"roam"|"assemble"; target:number[]; docked:boolean};
 
-const readDelivery = (saved:string):DeliveryRecord => saved ? JSON.parse(saved) : EMPTY_DELIVERY;
+const readDelivery = (saved:string):DeliveryRecord|null => saved ? JSON.parse(saved) : null;
 
 /** One real, independently persisted actor for each complete robot. */
 export class WorldRanger extends Actor {
@@ -21,20 +21,21 @@ export class WorldRanger extends Actor {
     return this.deliveryRecord;
   }
 
-  /** Close the job only with a measured receipt from the native adapter, under the same job ID. */
-  async recordPlacement(input:string): Promise<string> {
+  /** Marks the job placed, only with the native adapter's measured receipt for this exact job. */
+  async confirmDelivery(jobId:string, receiptJson:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
-    this.deliveryRecord=JSON.stringify(recordPlacement(readDelivery(this.deliveryRecord),input));
+    this.deliveryRecord=JSON.stringify(confirm(readDelivery(this.deliveryRecord),jobId,receiptJson));
     return this.deliveryRecord;
   }
 
-  async failDelivery(jobId:string, reason:string): Promise<string> {
+  /** Stops an active job on an explicit stop. A completed receipt is left as it is. */
+  async cancelDelivery(jobId:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
-    this.deliveryRecord=JSON.stringify(failDelivery(readDelivery(this.deliveryRecord),jobId,reason));
+    this.deliveryRecord=JSON.stringify(cancel(readDelivery(this.deliveryRecord),jobId));
     return this.deliveryRecord;
   }
 
-  async inspectDelivery(): Promise<string> {return JSON.stringify(readDelivery(this.deliveryRecord));}
+  async inspectDelivery(): Promise<string> {return this.deliveryRecord||"{}";}
 
   async authorizePhysics(input:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");

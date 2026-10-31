@@ -40,8 +40,8 @@ try {
   }
   const deliveries:string[]=[];
   for(let i=0;i<4;i++){
-    await call(ids[i],'authorizeDelivery',[JSON.stringify({jobId:`job-${i}`,slot:i,objectId:`box-${i}`,destination:[1,0,.5],tolerance:.05})]);
-    deliveries.push(JSON.stringify(await call(ids[i],'recordPlacement',[JSON.stringify({jobId:`job-${i}`,objectId:`box-${i}`,evidence:'measured',released:true,supported:true,settled:true,position:[1,0,.51],simulationTime:12.5})])));
+    await call(ids[i],'authorizeDelivery',[JSON.stringify({sequence:1,jobId:`job-${i}`,objectId:'cargo-0',destinationId:'station-1',ownerSlot:i,nativeReady:true})]);
+    deliveries.push(JSON.stringify(await call(ids[i],'confirmDelivery',[`job-${i}`,JSON.stringify({event:'placed',job_id:`job-${i}`,object_id:'cargo-0',owner_slot:i,destination_id:'station-1',tick:6000,time:12,evidence:'measured',settled_samples:50,position:[1,0,.5],target:[1,0,.5],support_force:1.18,linear_speed:.001,tilt_deg:.5,fingers_open:true,robot_contact:false,positioned:true,valid:true})])));
   }
   await runtime!.stop();runtime=undefined;await start();
   const after:Record<string,unknown>[]=[];for(const id of ids)after.push(await call(id,'inspect'));
