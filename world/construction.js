@@ -86,7 +86,7 @@ function buildScenery(scene) {
 
 export function createConstruction(scene) {
   const slots = buildSlots();
-  buildScenery(scene);
+  const scenery = buildScenery(scene);
   const crateMaterial = crateMesh();
   const geometry = new THREE.BoxGeometry(BOX * .985, BOX * .985, BOX * .985);
   const placed = new THREE.InstancedMesh(geometry, crateMaterial, slots.length);
@@ -136,7 +136,10 @@ export function createConstruction(scene) {
     const site = state?.site;
     if (!site) return;
     attach(models, state.rangers);
-    const physical = !!state.physics, apart = form < .25 && !physical;
+    // The timed preview stays out of a physical run, so nothing here can be mistaken for measured work.
+    const previewShown = !state.builder;
+    for (const object of [scenery, placed, stock, ...beams]) object.visible = previewShown;
+    const physical = !!state.physics || !!state.builder, apart = form < .25 && !physical;
 
     let count = 0;
     site.slots.forEach((s, i) => {
@@ -188,7 +191,7 @@ export function createConstruction(scene) {
     const beamSlots = slots.filter(s => s.kind === 'beam');
     beamSlots.forEach((plan, i) => {
       const live = site.beams.find(b => b.id === plan.id), s = site.slots[plan.id - 1], m = beams[i];
-      m.visible = true;
+      m.visible = previewShown;
       if (s.state === 'placed') return m.position.set(plan.x, plan.y, plan.z);
       const rackY = .5 + BEAM.height / 2 + i * BEAM.height, crew = s.by.map(slot => models[slot]);
       if (live && live.stage !== 'gathering' && crew.length === 2 && apart) {

@@ -125,7 +125,7 @@ async function command(name:string) {
   } finally {commandBusy=false;}
 }
 
-const assets:Record<string,string>={"/":"world/index.html","/world.js":"world/world.js","/city-plan.js":"world/city-plan.js","/city.js":"world/city.js","/site-plan.js":"world/site-plan.js","/construction.js":"world/construction.js","/views.js":"world/views.js","/city.css":"world/city.css","/robots.js":"world/robots.js","/style.css":"world/style.css",
+const assets:Record<string,string>={"/":"world/index.html","/world.js":"world/world.js","/city-plan.js":"world/city-plan.js","/city.js":"world/city.js","/site-plan.js":"world/site-plan.js","/construction.js":"world/construction.js","/views.js":"world/views.js","/builder-view.js":"world/builder-view.js","/city.css":"world/city.css","/robots.js":"world/robots.js","/style.css":"world/style.css",
   "/vendor/three.module.js":"node_modules/three/build/three.module.js","/vendor/three.core.js":"node_modules/three/build/three.core.js",
   "/vendor/OrbitControls.js":"node_modules/three/examples/jsm/controls/OrbitControls.js"};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});

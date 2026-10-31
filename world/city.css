@@ -28,11 +28,20 @@
 .scene-caption { z-index: 1; }
 .scene-caption span, .scene-caption small { color: #f7f4ea; text-shadow: 0 1px 3px #0009; }
 
+#builder-steps {
+  position: absolute; top: 40px; right: 10px; z-index: 1; margin: 0; padding: 8px 12px; list-style: none; pointer-events: none;
+  border-radius: 7px; background: #171c1ecc; color: #bfc6b8; font-size: 10px; line-height: 1.9; letter-spacing: .4px;
+}
+#builder-steps[hidden] { display: none; }
+#builder-steps li::before { content: '○'; display: inline-block; width: 15px; }
+#builder-steps li.done { color: #f4f2e8; }
+#builder-steps li.done::before { content: '✓'; color: #8fd6a4; font-weight: 700; }
+
 #view-chase.on { background: #2f4a3c; border-color: #2f4a3c; color: #f6f5ea; }
 
 @media (max-width: 540px) {
   #city-score .by { display: none; }
   #city-score { top: 68px; }
   .view-tag span { display: none; }
-  #mega-tag span { display: none; }
+  #mega-note { display: none; }
 }

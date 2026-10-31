@@ -49,6 +49,21 @@ function run(site:Construction,team=bots(),limit=20000,receipts:any[]=[],each=(_
   return i;
 }
 
+describe('page assets',()=>{
+  test('the server serves every module and stylesheet the page loads',async()=>{
+    const root=new URL('../world/',import.meta.url),server=await Bun.file(new URL('../actors/world-server.ts',import.meta.url)).text();
+    const pages=['world.js','city.js','city-plan.js','site-plan.js','construction.js','views.js','builder-view.js','robots.js','index.html'];
+    const wanted=new Set<string>();
+    for(const page of pages){
+      const text=await Bun.file(new URL(page,root)).text();
+      for(const match of text.matchAll(/from '\.\/([\w-]+\.js)'/g))wanted.add(match[1]);
+      for(const match of text.matchAll(/(?:href|src)="\/([\w-]+\.(?:js|css))"/g))wanted.add(match[1]);
+    }
+    expect(wanted.size).toBeGreaterThan(8);
+    for(const file of wanted)expect(server).toContain(`"/${file}":"world/${file}"`);
+  });
+});
+
 describe('job site plan',()=>{
   const slots=buildSlots();
   test('27 boxes and 2 two-Ranger beams, each box resting on the one below',()=>{

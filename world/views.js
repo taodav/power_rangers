@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {clearFraction} from './city-plan.js';
+import {builderProgress} from './builder-view.js';
 
 /**
  * One chase camera while the Rangers are combined, one per Ranger while they are apart.
@@ -8,6 +9,8 @@ import {clearFraction} from './city-plan.js';
 const SPLIT_PHASES = new Set(['roaming', 'rendezvous']);
 const CHASE = {
   mega: {offset: new THREE.Vector3(2.2, 6.3, -9.2), look: new THREE.Vector3(.2, 3.9, 7), fov: 54, wideFov: 68},
+  // On the same side as the two stands, looking across them, so the Ranger's body never hides the box.
+  bench: {offset: new THREE.Vector3(9.6, 4.6, -2.4), look: new THREE.Vector3(.9, 2.5, 1.1), fov: 42, wideFov: 58},
   ranger: {offset: new THREE.Vector3(1.05, 3.4, -6.4), look: new THREE.Vector3(0, 1.85, 5), fov: 56, wideFov: 68},
 };
 const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
@@ -43,8 +46,8 @@ class ChaseRig {
 }
 
 export function createViews({renderer, scene, camera, controls, atmosphere, rangers}) {
-  const mega = new ChaseRig(CHASE.mega), quad = [0, 1, 2, 3].map(() => new ChaseRig(CHASE.ranger));
-  let mode = 'chase', blend = 0, active = 'four';
+  const mega = new ChaseRig(CHASE.mega), bench = new ChaseRig(CHASE.bench), quad = [0, 1, 2, 3].map(() => new ChaseRig(CHASE.ranger));
+  let mode = 'chase', blend = 0, active = 'four', physical = false;
   const position = new THREE.Vector3();
   renderer.shadowMap.autoUpdate = false;
   camera.far = 1500; camera.updateProjectionMatrix();
@@ -86,13 +89,15 @@ export function createViews({renderer, scene, camera, controls, atmosphere, rang
     /** `core` is the smoothed body pose; `form` is 1 when folded together. */
     update(state, models, core, form, dt) {
       if (!state || !models.length) return;
-      active = SPLIT_PHASES.has(state.phase) ? 'four' : 'one';
+      physical = !!state.builder?.physics;
+      active = SPLIT_PHASES.has(state.phase) && !state.builder ? 'four' : 'one';
       const target = active === 'one' ? 1 : 0;
       blend = Math.abs(target - blend) < .002 ? target : blend + (target - blend) * damp(5, dt);
 
       position.set(core.x, 0, core.z);
       // Back out for the transform so all four limbs can be seen arriving.
-      mega.update(position, core.yaw, dt, state.phase === 'combined' ? 1 : 1.35);
+      if (physical) bench.update(position, core.yaw, dt);
+      else mega.update(position, core.yaw, dt, state.phase === 'combined' ? 1 : 1.35);
       models.forEach((model, i) => {
         const bot = state.bots[i];
         quad[i].update(model.root.position, bot.yaw, dt);
@@ -120,7 +125,7 @@ export function createViews({renderer, scene, camera, controls, atmosphere, rang
         draw(camera, {x: 0, y: 0, w: size.x, h: size.y}, size.y);
       } else {
         // The single view sits underneath; the four views open and close over it like shutters.
-        if (blend > .002) {const rect = {x: 0, y: 0, w: size.x, h: size.y}; mega.frame(rect); draw(mega.camera, rect, size.y);}
+        if (blend > .002) {const rect = {x: 0, y: 0, w: size.x, h: size.y}, main = physical ? bench : mega; main.frame(rect); draw(main.camera, rect, size.y);}
         const open = 1 - blend;
         if (open > .01) quad.forEach((rig, i) => {const rect = quadRect(i, open, size.x, size.y); rig.frame(rect); draw(rig.camera, rect, size.y);});
       }
@@ -132,7 +137,7 @@ export function createViews({renderer, scene, camera, controls, atmosphere, rang
       const box = renderer.domElement.getBoundingClientRect(), x = clientX - box.left, y = clientY - box.top;
       if (mode === 'free' || blend > .5) {
         pointer.set(x / box.width * 2 - 1, -(y / box.height) * 2 + 1);
-        return mode === 'free' ? camera : mega.camera;
+        return mode === 'free' ? camera : physical ? bench.camera : mega.camera;
       }
       const column = x < box.width / 2 ? 0 : 1, row = y < box.height / 2 ? 0 : 1;
       pointer.set((x - column * box.width / 2) / (box.width / 2) * 2 - 1, -((y - row * box.height / 2) / (box.height / 2)) * 2 + 1);
@@ -141,19 +146,48 @@ export function createViews({renderer, scene, camera, controls, atmosphere, rang
   };
 }
 
+/** A physical run: everything shown comes from measured state, and success only from isDelivered. */
+function showBuilder(state, builder, $) {
+  const ranger = state.rangers[builder.slot], progress = builderProgress(builder, ranger.name);
+  $('assemble').disabled = true;
+  $('phase-title').textContent = progress.title;
+  $('phase-description').textContent = progress.detail;
+  $('scene-state').textContent = 'MUJOCO · ONE PHYSICAL RANGER';
+  $('scene-detail').textContent = 'Drawn from measured poses. The job site waits until this run stops.';
+  $('mega-name').textContent = ranger.name.toUpperCase();
+  $('mega-note').textContent = progress.delivered ? 'delivered' : progress.failed ? 'stopped' : builder.status;
+  const list = $('builder-steps');
+  if (list.childElementCount !== progress.steps.length) list.replaceChildren(...progress.steps.map(() => document.createElement('li')));
+  progress.steps.forEach((step, i) => {list.children[i].textContent = step.label; list.children[i].classList.toggle('done', step.done);});
+  document.querySelectorAll('.ranger-state').forEach((label, i) => {
+    label.textContent = i !== builder.slot ? 'standing by' : progress.delivered ? 'delivered' : progress.failed ? 'stopped' : builder.status;
+  });
+  if (progress.failed) {$('error').hidden = false; $('error').textContent = progress.detail;}
+}
+
 /** Page controls and labels for the job site. Called with each new state. */
 export function updateCityUI(state, busy) {
   const $ = id => document.getElementById(id), site = state.site;
   if (!site) return;
-  const roaming = state.phase === 'roaming', rebuild = $('rebuild');
-  rebuild.hidden = !(roaming && site.complete); rebuild.disabled = busy || state.paused || !!state.error;
-  if (roaming && !state.paused) {
+  const roaming = state.phase === 'roaming', rebuild = $('rebuild'), builder = state.builder;
+  rebuild.hidden = !(roaming && site.complete) || !!builder; rebuild.disabled = busy || state.paused || !!state.error;
+  // Offered only by a server that has the physical builder.
+  const deliver = $('deliver'), stop = $('builder-stop');
+  deliver.hidden = builder !== null || !roaming;
+  deliver.disabled = busy || state.paused || !!state.error || !state.physicsAvailable;
+  stop.hidden = !builder; stop.disabled = busy;
+  $('builder-steps').hidden = !builder; $('city-score').hidden = !!builder;
+  if (builder) showBuilder(state, builder, $);
+  else if (roaming && !state.paused) {
     $('phase-title').textContent = site.complete ? 'Topped out' : 'Building together';
     $('phase-description').textContent = site.complete ? 'All four Rangers finished the structure, so they are back on patrol.' : 'Each Ranger claims its own next job and saves a receipt for every placement.';
     $('scene-state').textContent = 'FOUR BUILDERS · KINEMATIC';
     $('scene-detail').textContent = 'Claims and receipts are durable. Motion and boxes are not physics yet.';
   }
-  $('mega-note').textContent = state.physics ? 'MuJoCo rig · building paused' : 'Building paused while combined';
+  if (!builder) {
+    $('mega-name').textContent = 'MEGAZORD';
+    $('mega-note').textContent = state.physics ? 'MuJoCo rig · building paused' : 'Building paused while combined';
+  }
   $('placed-count').textContent = site.placed;
   $('placed-total').textContent = `OF ${site.total} PLACED`;
   const by = $('placed-by');

@@ -4,6 +4,7 @@ import {makeRanger,makeCore,makeIsland,makePhysicsRig} from './robots.js';
 import {applyAtmosphere,makeCity} from './city.js';
 import {createConstruction} from './construction.js';
 import {createCoreSmoother,createViews,updateCityUI} from './views.js';
+import {builderPose} from './builder-view.js';
 
 const $=id=>document.getElementById(id), viewport=$('viewport');
 let state=null, selected=-1, online=false, pending=false, lastEvent=-1, lastPhase='', follow=false;
@@ -36,7 +37,7 @@ sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-15,righ
 const fill=new THREE.DirectionalLight('#c2d7e6',1.15);fill.position.set(12,8,-8);scene.add(fill);
 const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(300,300),new THREE.MeshStandardMaterial({color:'#e0e5d4',roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-2.8;backdrop.receiveShadow=true;scene.add(backdrop);
 const atmosphere=applyAtmosphere(scene,renderer,sun);makeCity(scene,renderer);const construction=createConstruction(scene),smoothCore=createCoreSmoother();let views=null,lastFrame=performance.now();
-makeIsland(scene);const core=makeCore();scene.add(core.root);const physicsRig=makePhysicsRig(scene);
+makeIsland(scene);const core=makeCore();scene.add(core.root);const physicsRig=makePhysicsRig(scene),builderRig=makePhysicsRig(scene);
 const railMaterial=new THREE.LineBasicMaterial({color:'#aec18e',transparent:true,opacity:.6});
 const rails=[];
 for(let i=0;i<4;i++){const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),railMaterial);line.visible=false;scene.add(line);rails.push(line);}
@@ -112,15 +113,17 @@ async function poll() {
   } catch {connection(false);error('The local world is disconnected. Controls are disabled; no movement is being invented. Start run_world.py to reconnect.');for(const id of ['pause','assemble','patrol'])$(id).disabled=true;}
   setTimeout(poll,online?120:1000);
 }
-async function command(name) {
+async function command(name,extra={},timeout=5000) {
   if(!online||pending)return;pending=true;updateUI();
-  try{const response=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name}),signal:AbortSignal.timeout(5000)});const body=await response.json();if(!response.ok)throw new Error(body.error??'Command failed');}
+  try{const response=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name,...extra}),signal:AbortSignal.timeout(timeout)});const body=await response.json();if(!response.ok)throw new Error(body.error??'Command failed');}
   catch(e){error(e.message);}finally{pending=false;updateUI();}
 }
 $('pause').addEventListener('click',()=>command('pause'));
 $('assemble').addEventListener('click',()=>command(state.phase==='combined'?'separate':'assemble'));
 $('patrol').addEventListener('click',()=>command('patrol'));
 $('rebuild').addEventListener('click',()=>command('rebuild'));
+$('deliver').addEventListener('click',()=>command('deliver',{objectId:'cargo-0',destinationId:'station-1'},30000));
+$('builder-stop').addEventListener('click',()=>command('builder-stop',{},15000));
 let cameraGoal=null,targetGoal=null;
 function frameTeam(){follow=false;selected=-1;cards.forEach(c=>c.classList.remove('selected'));cameraGoal=new THREE.Vector3(19,18,23);targetGoal=new THREE.Vector3(0,1,0);}
 function frameCore(){follow=false;const c=state?.core??{x:0,z:0};cameraGoal=new THREE.Vector3(c.x+10,9,c.z+15);targetGoal=new THREE.Vector3(c.x,2.4,c.z);}
@@ -140,11 +143,11 @@ function render() {
   if(state) {
     const transforming=['assembling','combined','separating'].includes(state.phase),p=smooth(state.progress),c=smoothCore(state.core,frameAt/1000,state.paused);
     const cx=c.x*(state.phase==='separating'?p:1),cz=c.z*(state.phase==='separating'?p:1),cyaw=c.yaw*(state.phase==='separating'?p:1);
-    core.root.visible=!state.physics;physicsRig.update(state.physics);
+    const native=!!state.physics||!!state.builder;core.root.visible=!native;physicsRig.update(state.physics);builderRig.update(state.builder?.physics??null);
     core.root.position.set(cx,0,cz);core.root.rotation.y=cyaw;core.pose(p,state.time);
     rangerModels.forEach((model,i)=>{
       const bot=state.bots[i],dock=state.rangers[i].dock,m=mount[i],scale=i<2?.9:1;
-      model.root.visible=!state.physics;
+      model.root.visible=!native;
       let x=bot.x,y=0,z=bot.z,yaw=bot.yaw;
       if(transforming) {
         const mx=cx+m[0]*Math.cos(cyaw)+m[2]*Math.sin(cyaw),mz=cz-m[0]*Math.sin(cyaw)+m[2]*Math.cos(cyaw);
@@ -155,12 +158,12 @@ function render() {
       if(state.paused||!online||!model.root.userData.placed||state.phase==='combined')model.root.position.copy(destination);else model.root.position.lerp(destination,.23);
       model.root.userData.placed=true;model.root.rotation.set(0,yaw,0);model.root.scale.setScalar(THREE.MathUtils.lerp(1,scale,p));
       model.pose(bot.distance,bot.speed,transforming?p:0,selected===i);
-      labels[i].position.copy(model.root.position).add(new THREE.Vector3(0,3.12,0));labels[i].visible=!transforming;
+      labels[i].position.copy(model.root.position).add(new THREE.Vector3(0,3.12,0));labels[i].visible=!transforming&&!native;
       rails[i].visible=['rendezvous','assembling','separating'].includes(state.phase);
       if(rails[i].visible){rails[i].geometry.setFromPoints([new THREE.Vector3(dock[0],.18,dock[1]),new THREE.Vector3(cx+m[0],p*m[1]+.2,cz)]);}
     });
     construction.update(state,rangerModels,p);
-    views?.update(state,rangerModels,{x:cx,z:cz,yaw:cyaw},p,dt);
+    views?.update(state,rangerModels,state.builder?.physics?builderPose(state.builder.physics):{x:cx,z:cz,yaw:cyaw},p,dt);
     if(follow&&selected>=0){const target=rangerModels[selected].root.position.clone();target.y+=1.5;const delta=target.clone().sub(controls.target).multiplyScalar(.035);camera.position.add(delta);controls.target.add(delta);}
   }
   if(cameraGoal){camera.position.lerp(cameraGoal,.045);controls.target.lerp(targetGoal,.045);if(camera.position.distanceTo(cameraGoal)<.02){cameraGoal=null;targetGoal=null;}}
