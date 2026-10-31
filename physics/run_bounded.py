@@ -51,6 +51,7 @@ def main():
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--compare-gaits", action="store_true")
     parser.add_argument("--ranger", action="store_true")
+    parser.add_argument("--deliver", action="store_true")
     args = parser.parse_args()
     if not 0 < args.seconds <= 90:
         parser.error("Use 0–90 simulated seconds")
@@ -67,6 +68,8 @@ def main():
         command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / "physics/megazord.py"), "--compare-gaits", str(args.seconds)]
     elif args.ranger:
         command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / "physics/ranger.py"), "--trial", str(args.seconds)]
+        if args.deliver:
+            command.append("--deliver")
     child = subprocess.Popen(command, cwd=ROOT, env=child_environment(), text=True,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     deadline = time.monotonic()+300

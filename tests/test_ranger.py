@@ -26,6 +26,53 @@ def run_disabled_grip(*, frictionless=False):
 
 
 class RangerTests(unittest.TestCase):
+    def test_physical_delivery_releases_and_settles_without_robot_support(self):
+        state = physics.trial(55, delivery=True)
+        self.assertFalse(state["failed"])
+        self.assertEqual(state["job"], "complete")
+        self.assertTrue(state["objects"][0]["placed"])
+        self.assertIsNone(state["objects"][0]["held_by"])
+        receipt = state["manipulation_receipts"][-1]
+        self.assertEqual(receipt["event"], "placed")
+        self.assertEqual(receipt["evidence"], "measured")
+        self.assertEqual(receipt["destination_id"], "station-1")
+        self.assertGreaterEqual(receipt["settled_samples"], 50)
+        for observed in (receipt, state["placement"]):
+            self.assertTrue(observed["valid"])
+            self.assertTrue(observed["fingers_open"])
+            self.assertFalse(observed["robot_contact"])
+            self.assertGreater(observed["support_force"], .5)
+            self.assertLess(observed["linear_speed"], .02)
+            self.assertLess(observed["tilt_deg"], 8)
+            self.assertLess(physics.np.linalg.norm(physics.np.array(observed["position"])-physics.DESTINATION), .025)
+        self.assertEqual(state["external_force_max"], 0)
+
+    def test_target_pose_alone_is_not_placement_evidence(self):
+        sim = physics.Ranger(delivery=True)
+        # Synthetic observation control, not an executor or a claimed physical run.
+        sim.data.xpos[sim.cargo] = physics.DESTINATION
+        self.assertTrue(sim.placement_observation()["positioned"])
+        self.assertFalse(sim.placement_observation()["valid"])
+        self.assertFalse(sim.state()["objects"][0]["placed"])
+
+    def test_worker_requires_settling_and_fixed_job_and_refuses_replay(self):
+        sim = physics.Ranger(delivery=True)
+        command = {"command": "deliver", "jobId": "test-job", "objectId": "cargo-0", "destinationId": "station-1"}
+        with self.assertRaises(ValueError):
+            physics.worker_command(sim, command)
+        for _ in range(3):
+            physics.worker_command(sim, {"command": "step", "ticks": 50})
+        for invalid in ({**command, "destinationId": "unknown"}, {**command, "jobId": ""},
+                        {"command": "reset"}, {"command": "step", "ticks": 100000}):
+            with self.assertRaises(ValueError):
+                physics.worker_command(sim, invalid)
+        state = physics.worker_command(sim, command)
+        self.assertEqual(state["job_id"], "test-job")
+        self.assertEqual(state["job"], "approach")
+        self.assertTrue(state["geoms"])
+        with self.assertRaises(ValueError):
+            physics.worker_command(sim, command)
+
     def test_robot_and_cargo_are_free_bodies_without_hidden_support(self):
         sim = physics.Ranger()
         self.assertEqual(sim.model.nmocap, 0)

@@ -2,7 +2,7 @@
 
 ## Independent physical Ranger bench
 
-The next robotics milestone is an independent humanoid that walks and picks up objects through actuated gripper contact. A **headless one-Ranger proof now walks, grasps a free box, lifts it from a visible waist-high stand, and carries it for two steps**. It is not yet the four-builder browser mode or connected to a durable job actor. Physical stacking and floor pickup remain future work. See [the measured result and run instructions](physics/RANGER-STATUS.md).
+An independent humanoid now **walks, grasps a free box, carries it, places it on a second stand, opens its gripper, and withdraws** in MuJoCo. Ember's real local Terse actor saves the delivery intent before motion and saves a placement receipt only after measured support, release, target-pose and settling checks pass. This is one physical robot in a separate episode, not yet four physical builders sharing the city. Physical stacking and floor pickup remain future work. See [the measured result and run instructions](physics/RANGER-STATUS.md).
 
 ## New: four-Ranger assembly world
 
@@ -48,22 +48,23 @@ The world sits in a procedural city, with one chase camera per Ranger while they
 
 Each `WorldRanger` chooses its own next job (`decideBuild`), saves that claim, and saves a receipt per slot (`confirmPlaced`). The world starts no work on a slot until the claim is saved, and a beam does not lift until both carriers are in place. Crate colours show who placed what.
 
-**This is not physical construction.** Walking, lifting and placing are timed animation, and crates are not simulated objects. Every receipt it writes says `evidence: "kinematic"`, which is not proof of a placement; physical work has a separate path (`authorizeDelivery` and `confirmDelivery`) that accepts only measured receipts, and the live adapter that writes them is still in progress. Building stops during assembly, in combined form and in the MuJoCo rig, and picks up again afterward. Like other world state, the structure is in memory and does not survive a launcher restart, though the actors' records do.
+**This city preview is not physical construction.** Walking, lifting and placing are timed animation, and its crates are not simulated objects. Every preview receipt says `evidence: "kinematic"`. The independent physical delivery has a separate path (`authorizeDelivery` and `confirmDelivery`) that accepts only measured receipts. Starting a physical delivery suspends the city preview and enters the one-Ranger bench; stopping that episode returns to the preview. It does not promote the preview's animated boxes into physical objects. Like other world state, the structure is in memory and does not survive a launcher restart, though the actors' records do.
 
 ### What this prototype does—and does not—prove
 
-**Independent roaming, transformation, docking, and separation in this browser world are still kinematic.** Combined walking is now real MuJoCo locomotion on a simplified flat-ground biped rig, not yet the exact decorative Ranger meshes converted into one continuous physical mechanism. Entering that rig initializes a separate physics episode; leaving it returns to the visual assembly rails. Autonomous physical docking, terrain navigation, learned control, and integrating the independent Ranger bench into this world remain future work. The planners are numeric; there are **no model calls**. Coordination uses the local world barrier and Terse RPC, not Inkwell or Agent Relay.
+**City-preview roaming, transformation, docking, and separation are still kinematic.** Combined walking and independent delivery each use a separate real MuJoCo episode, not the exact decorative Ranger meshes converted into one continuous mechanism. The independent delivery currently has one actor authorizing a fixed numeric job; its low-level gait and arm control are not independent model calls or online learned plans. Four physical builders in one world, autonomous physical docking, terrain navigation and learned control remain future work. There are **no model calls** in these modes. Coordination uses the local world barrier and Terse RPC, not Inkwell or Agent Relay.
 
 Actor records are durable, but world poses, simulation time, and the last 120 log events are in application memory. A launcher restart deliberately creates a new episode with four new actor IDs; it does **not** resume the physical world. An uncertain actor outcome freezes the world rather than guessing or retrying a possibly committed decision. The untouched original Go1 lane below has a separate, more complete physics-checkpoint design.
 
 Bounded checks for this new mode (do not run concurrently with the simulator):
 
 ```bash
-bun --no-env-file test actors/world.test.ts actors/world-city.test.ts
+bun --no-env-file test actors/world.test.ts actors/world-city.test.ts actors/world-delivery.test.ts actors/world-builder.test.ts
 bun --no-env-file actors/node_modules/typescript/bin/tsc -p actors/tsconfig.world.json
 python3 -I -B tests/test_world_launcher.py
 python3 -I -B tests/test_physics_admission.py
 python3 -I -B physics/run_bounded.py --test
+python3 -I -B physics/run_bounded.py --ranger --test
 ```
 
 The actor unit tests use a mock SDK and do not prove persistence. Live browser, native walking, and real-runtime restart evidence is documented in `physics/STATUS.md`; the original visual-only packet remains in `world/VALIDATION.md`.

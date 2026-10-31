@@ -10,12 +10,13 @@ export class PhysicsWorker {
   private lifetime:ReturnType<typeof setTimeout>;
   private root:string;
   private environment:Record<string,string>;
-  constructor(root:string) {
+  constructor(root:string,kind:'combined'|'ranger'='combined') {
+    if(kind!=='combined'&&kind!=='ranger')throw new Error('Unknown native model');
     this.root=root;
     this.environment={HOME:resolve(root,'.cache/world/home'),TMPDIR:resolve(root,'.cache/world/tmp'),PATH:'/usr/bin:/bin',LANG:'en_US.UTF-8',
       OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1',VECLIB_MAXIMUM_THREADS:'1'};
     this.checkGate();
-    this.process=Bun.spawn([resolve(root,'.venv/bin/python'),'-I','-B',resolve(root,'physics/megazord.py')],{
+    this.process=Bun.spawn([resolve(root,'.venv/bin/python'),'-I','-B',resolve(root,kind==='ranger'?'physics/ranger.py':'physics/megazord.py'),...(kind==='ranger'?['--worker']:[])],{
       cwd:root,env:this.environment,stdin:'pipe',stdout:'pipe',stderr:'ignore'});
     this.lifetime=setTimeout(()=>{this.fail(new Error('Five-minute native trial limit reached'));this.process.kill();},300000);
     void this.read();

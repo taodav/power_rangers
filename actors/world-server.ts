@@ -1,10 +1,11 @@
-/** One kinematic world writer; four independent, genuinely durable planners. */
+/** One world writer; four durable planners, with mutually exclusive native episodes. */
 import {startLocalActors} from "terse-sdk/dev";
 import {createServer} from "node:net";
 import {resolve} from "node:path";
 import {World} from "./world-engine";
 import {RANGERS} from "./src/world-policy";
 import {PhysicsWorker} from "./world-physics";
+import {PhysicalBuilder} from "./world-builder";
 import {Construction,canBuild,type BuildRequest} from "./world-construction";
 
 const root=resolve(import.meta.dir,"..");
@@ -20,6 +21,7 @@ const runtime=await startLocalActors({project:import.meta.dir,entrypoint:"src/wo
 const world=new World(), inflight=new Map<number,Promise<void>>();
 world.physicsAvailable=await Bun.file(resolve(root,'.venv/bin/python')).exists();
 let physicsWorker:PhysicsWorker|null=null,physicsBusy:Promise<void>|null=null,commandBusy=false;
+let builder:PhysicalBuilder|null=null,builderBusy:Promise<void>|null=null;
 async function rpc(id:string,method:string,args:unknown[]) {
   const response=await fetch(`${runtime.connection.controlPlaneUrl}/v1/projects/ranger-world/actors/WorldRanger/${id}/invoke`,{
     method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${key}`},
@@ -99,11 +101,42 @@ async function physicsTick() {
   })().catch(async error=>{world.error=error instanceof Error?error.message:'Native physics failed';world.event(-1,'error',world.error);await worker.stop();if(physicsWorker===worker)physicsWorker=null;}).finally(()=>physicsBusy=null);
 }
 
-async function command(name:string) {
+function builderTick(){
+  if(!builder||builderBusy||world.paused||world.error)return;
+  const current=builder,before=current.physics?.time??0;
+  builderBusy=current.tick().then(()=>{world.time+=Math.max(0,(current.physics?.time??before)-before);}).finally(()=>builderBusy=null);
+}
+
+async function command(name:string,data:Record<string,unknown>={}) {
   if(commandBusy)throw new Error('Another command is still completing');
   commandBusy=true;
   try {
     await physicsBusy;
+    await builderBusy;
+    if(name==='builder-stop'){
+      if(!builder)throw new Error('No physical builder episode is active');
+      await builder.stop();builder=null;world.paused=false;
+      world.bots.forEach(bot=>{bot.target=null;bot.speed=0;bot.needsPlan=true;});
+      world.event(0,'physics','Native builder episode closed. Returning to the explicitly kinematic city preview.');return;
+    }
+    if(builder){
+      if(name!=='pause')throw new Error('Stop the builder episode before changing modes');
+      world.command('pause');builder.pause(world.paused);return;
+    }
+    if(name==='deliver'){
+      if(data.objectId!=='cargo-0'||data.destinationId!=='station-1')throw new Error('Only cargo-0 to station-1 is available in this physical bench');
+      if(world.phase!=='roaming'||physicsWorker||world.physics||world.error)throw new Error('Return to a healthy independent world first');
+      if(!world.physicsAvailable)throw new Error('Install the repo-local physics requirements first');
+      await Promise.all([...inflight.values(),...siteInflight]);
+      if(world.error)throw new Error('An earlier actor decision needs reconciliation');
+      site.step(.05,false,world.bots,(slot,kind,text)=>world.event(slot,kind,text));
+      world.bots.forEach(bot=>{bot.target=null;bot.speed=0;bot.needsPlan=false;});
+      world.paused=false;
+      builder=new PhysicalBuilder(world.bots[0].id,()=>new PhysicsWorker(root,'ranger'),rpc,text=>world.event(0,'physics',text));
+      await builder.start();
+      if(builder.error)throw new Error(builder.error);
+      world.time+=builder.physics.time;return;
+    }
     if(name==='rebuild'){if(!site.complete)throw new Error('The structure is not finished yet');site.rebuild();world.event(-1,'build','New job started.');return;}
     if(name==='patrol'){
       if(world.phase!=='combined'||world.error)throw new Error('Assemble a healthy team first');
@@ -133,7 +166,8 @@ const server=Bun.serve({hostname:"127.0.0.1",port,maxRequestBodySize:512,async f
   const url=new URL(request.url);
   if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(request.headers.get("Host")??""))return json({error:"Local host only"},403);
   if(request.method==="GET") {
-    if(url.pathname==="/api/state")return json({...world.snapshot(),inflight:inflight.size+siteInflight.size+Number(!!physicsBusy),rangers:RANGERS,site:site.snapshot()});
+    if(url.pathname==="/api/state")return json({...world.snapshot(),inflight:inflight.size+siteInflight.size+Number(!!physicsBusy)+Number(!!builderBusy),rangers:RANGERS,site:site.snapshot(),builder:builder?.snapshot()??null,
+      ...(builder?{control:'One Terse delivery actor · numeric MuJoCo skill',boundary:'One physical Ranger in a separate delivery episode. City preview suspended; four-robot physics and full-world recovery remain future work.'}:{})});
     const path=assets[url.pathname];if(!path)return json({error:"Not found"},404);
     const file=Bun.file(resolve(root,path));if(!await file.exists())return json({error:"Asset missing"},404);
     return new Response(file,{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
@@ -141,12 +175,12 @@ const server=Bun.serve({hostname:"127.0.0.1",port,maxRequestBodySize:512,async f
   if(request.method!=="POST"||url.pathname!=="/api/command")return json({error:"Not found"},404);
   if(![`http://127.0.0.1:${port}`,`http://localhost:${port}`].includes(request.headers.get("Origin")??""))return json({error:"Same-origin command required"},403);
   if(request.headers.get("Content-Type")!=="application/json"||Number(request.headers.get("Content-Length"))>512)return json({error:"Small JSON command required"},400);
-  try {const text=await request.text();if(text.length>512)throw new Error("Command too large");const data=JSON.parse(text);await command(data.command);return json({ok:true});}
+  try {const text=await request.text();if(text.length>512)throw new Error("Command too large");const data=JSON.parse(text);await command(data.command,data);return json({ok:true});}
   catch(error){return json({error:error instanceof Error?error.message:"Invalid command"},400);}
 }});
-const interval=setInterval(()=>{if(commandBusy)return;if(world.physics){void physicsTick();return;}world.step(.05);tickSite();world.bots.forEach(b=>work(b.slot));},50);
+const interval=setInterval(()=>{if(commandBusy)return;if(builder){builderTick();return;}if(world.physics){void physicsTick();return;}world.step(.05);tickSite();world.bots.forEach(b=>work(b.slot));},50);
 let stopping=false;
-async function stop(){if(stopping)return;stopping=true;clearInterval(interval);server.stop(true);await physicsBusy;await physicsWorker?.stop();await Promise.allSettled([...inflight.values(),...siteInflight]);await runtime.stop();process.exit(0);}
+async function stop(){if(stopping)return;stopping=true;clearInterval(interval);server.stop(true);await builderBusy;await builder?.shutdown();await physicsBusy;await physicsWorker?.stop();await Promise.allSettled([...inflight.values(),...siteInflight]);await runtime.stop();process.exit(0);}
 process.on("SIGINT",stop);process.on("SIGTERM",stop);
 runtime.closed.catch(()=>{world.error="Local Terse runtime disconnected; world stopped.";world.event(-1,"error",world.error);});
 console.log(`Ranger World: http://127.0.0.1:${port} (local Terse :${actorPort})`);
