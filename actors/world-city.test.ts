@@ -176,12 +176,12 @@ describe('durable build records (mock SDK)',()=>{
     const a=await actor(0);await expect(a.confirmPlaced(1,7,'kinematic')).rejects.toThrow();
     await a.decideBuild(claim(1));await expect(a.confirmPlaced(2,7,'kinematic')).rejects.toThrow();await expect(a.confirmPlaced(1,8,'kinematic')).rejects.toThrow();
     await a.confirmPlaced(1,7,'kinematic');await a.confirmPlaced(1,7,'kinematic');expect(JSON.parse(await a.inspect()).build.placed).toEqual([{slotId:7,evidence:'kinematic'}]);
-    await a.decideBuild(claim(2,[{id:9,x:1,z:0,level:0,crew:1}]));await a.confirmPlaced(2,9,'measured');expect(JSON.parse(await a.inspect()).build.placed[1]).toEqual({slotId:9,evidence:'measured'});
+    await a.decideBuild(claim(2,[{id:9,x:1,z:0,level:0,crew:1}]));await a.confirmPlaced(2,9,'kinematic');expect(JSON.parse(await a.inspect()).build.placed[1]).toEqual({slotId:9,evidence:'kinematic'});
     await a.decideBuild(claim(3,[]));await expect(a.confirmPlaced(3,0,'kinematic')).rejects.toThrow();
   });
   test('a receipt must say what backs it',async()=>{
     const a=await actor(0);await a.decideBuild(claim(1));
-    for(const bad of [undefined,'','timer','MEASURED'])await expect(a.confirmPlaced(1,7,bad as any)).rejects.toThrow();
+    for(const bad of [undefined,'','timer','measured'])await expect(a.confirmPlaced(1,7,bad as any)).rejects.toThrow();
     expect(JSON.parse(await a.inspect()).build.placed).toEqual([]);
   });
   test('the site labels everything it settles as kinematic',()=>{
