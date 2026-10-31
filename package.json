@@ -1,0 +1,6 @@
+{
+  "name": "rangers-assembly-world",
+  "private": true,
+  "type": "module",
+  "dependencies": {"three": "0.187.0"}
+}
