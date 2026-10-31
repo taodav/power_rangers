@@ -66,7 +66,7 @@ export function builderProgress(builder, name) {
   if (builder.status === 'starting') return {steps, delivered, failed: false, title: 'Starting physics', detail: `${name} is waking up in MuJoCo.`};
   if (builder.status === 'confirming') return {steps, delivered, failed: false, title: 'Checking the placement', detail: `${name} is saving the measured receipt.`};
   const job = JOBS[physics?.job] ?? 'Working';
-  const stepsTaken = physics?.steps ?? 0;
+  const stepsTaken = physics?.steps ?? 0, speed = builder.playback > 1 ? ` · ${builder.playback}× playback` : '';
   return {steps, delivered, failed: false, title: builder.status === 'paused' ? 'Physics paused' : job,
-    detail: `${stepsTaken} measured step${stepsTaken === 1 ? '' : 's'} · ${(physics?.time ?? 0).toFixed(1)} s of simulated time`};
+    detail: `${stepsTaken} measured step${stepsTaken === 1 ? '' : 's'} · ${(physics?.time ?? 0).toFixed(1)} s of simulated time${speed}`};
 }

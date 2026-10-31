@@ -111,7 +111,7 @@ async function poll() {
     if(state&&next.run!==state.run){location.reload();return;}
     if(!state){setupRangers(next.rangers);views=createViews({renderer,scene,camera,controls,atmosphere,rangers:next.rangers});}state=next;connection(true);error(state.error);updateUI();$('loading').hidden=true;
   } catch {connection(false);error('The local world is disconnected. Controls are disabled; no movement is being invented. Start run_world.py to reconnect.');for(const id of ['pause','assemble','patrol'])$(id).disabled=true;}
-  setTimeout(poll,online?120:1000);
+  setTimeout(poll,online?(state?.builder?60:120):1000);
 }
 async function command(name,extra={},timeout=5000) {
   if(!online||pending)return;pending=true;updateUI();

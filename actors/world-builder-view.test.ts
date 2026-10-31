@@ -47,6 +47,11 @@ describe('progress while running',()=>{
     const p=builderProgress(running({job:'carry',steps:3,time:21.5,manipulation_receipts:[{event:'finger_contact'},{event:'unsupported_lift'}]}),'Ember');
     expect(p.title).toBe('Carrying the box');expect(p.detail).toBe('3 measured steps · 21.5 s of simulated time');expect(label(p)).toEqual(['Gripped','Lifted']);
   });
+  test('says when it is playing faster than real time, and only then',()=>{
+    expect(builderProgress({...running({steps:2,time:5}),playback:3},'Ember').detail).toBe('2 measured steps · 5.0 s of simulated time · 3× playback');
+    expect(builderProgress({...running({steps:2,time:5}),playback:1},'Ember').detail).not.toContain('playback');
+    expect(builderProgress(running({steps:2,time:5}),'Ember').detail).not.toContain('playback');
+  });
   test('singular step, unknown jobs and paused',()=>{
     expect(builderProgress(running({steps:1}),'Ember').detail).toContain('1 measured step ·');
     expect(builderProgress(running({job:'brand_new'}),'Ember').title).toBe('Working');
