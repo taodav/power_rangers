@@ -1,5 +1,6 @@
 import {Actor, Persisted, Ephemeral} from "terse-sdk/actor";
 import {waypoint, validateRequest, type PlanRequest} from "./world-policy";
+import {chooseSlot, validateBuild, type BuildObservation} from "./build-policy";
 
 type Memory = {slot:number; seed:number; decisions:number; epoch:number; sequence:number; input:string;
   mode:"roam"|"assemble"; target:number[]; docked:boolean};
@@ -9,6 +10,32 @@ export class WorldRanger extends Actor {
   @Persisted private record = "";
   @Ephemeral private activation = crypto.randomUUID();
   @Persisted private physicsRecord = "";
+  @Persisted private buildRecord = "";
+
+  /** This Ranger's own durable choice of its next job on the site. Exact retries are idempotent. */
+  async decideBuild(input:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    const observation=JSON.parse(input) as BuildObservation;validateBuild(observation);
+    const previous=this.buildRecord?JSON.parse(this.buildRecord):{sequence:0,placed:[],confirmed:0};
+    if(observation.sequence===previous.sequence){if(previous.input!==input)throw new Error("Conflicting build retry");return this.buildRecord;}
+    if(observation.sequence!==previous.sequence+1)throw new Error("Out-of-order build observation");
+    this.buildRecord=JSON.stringify({...previous,sequence:observation.sequence,input,...chooseSlot(observation)});
+    return this.buildRecord;
+  }
+
+  /**
+   * Receipt for the slot this Ranger claimed, counted once per claim. A claim is only intent, and the
+   * evidence says what backs the receipt: "kinematic" is a timed preview, never proof of a physical placement.
+   */
+  async confirmPlaced(sequence:number, slotId:number, evidence:"kinematic"|"measured"): Promise<string> {
+    if(!this.buildRecord)throw new Error("No build claim to confirm");
+    const memory=JSON.parse(this.buildRecord);
+    if(!["kinematic","measured"].includes(evidence))throw new Error("A placement receipt must state its evidence");
+    if(memory.sequence!==sequence||memory.action!=="claim"||memory.slotId!==slotId)throw new Error("Placement receipt does not match the saved claim");
+    if(memory.confirmed===sequence)return this.buildRecord;
+    this.buildRecord=JSON.stringify({...memory,confirmed:sequence,placed:[...memory.placed,{slotId,evidence}]});
+    return this.buildRecord;
+  }
 
   async authorizePhysics(input:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
@@ -62,7 +89,7 @@ export class WorldRanger extends Actor {
   }
 
   async inspect(): Promise<string> {
-    return JSON.stringify({id:this.id, activation:this.activation, ...(this.record ? JSON.parse(this.record) : {})});
+    return JSON.stringify({id:this.id, activation:this.activation, ...(this.record ? JSON.parse(this.record) : {}), build:this.buildRecord ? JSON.parse(this.buildRecord) : null});
   }
 
   async inspectPhysics(): Promise<string> {return this.physicsRecord||"{}";}

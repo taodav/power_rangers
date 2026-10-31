@@ -1,1 +1,1 @@
-{"extends":"./tsconfig.json","include":["src/world-actor.ts","src/world-policy.ts","world-engine.ts","world-server.ts","world.test.ts","world-restart-probe.ts"]}
+{"extends":"./tsconfig.json","compilerOptions":{"allowJs":true},"include":["src/world-actor.ts","src/world-policy.ts","src/build-policy.ts","world-construction.ts","world-city.test.ts","../world/city-plan.js","../world/site-plan.js","world-engine.ts","world-server.ts","world.test.ts","world-restart-probe.ts"]}

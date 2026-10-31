@@ -35,7 +35,11 @@ try {
   for(let i=0;i<4;i++){
     await call(ids[i],'initialize',[i]);
     await call(ids[i],'decide',[JSON.stringify({epoch:1,sequence:1,mode:'assemble',x:0,z:0})]);
-    before.push(await call(ids[i],'confirmDock',[1,...RANGERS[i].dock]));
+    await call(ids[i],'confirmDock',[1,...RANGERS[i].dock]);
+    const claim=await call(ids[i],'decideBuild',[JSON.stringify({sequence:1,x:0,z:0,open:[{id:100+i,x:1,z:0,level:0,crew:1}]})]);
+    if(claim.action!=='claim'||claim.slotId!==100+i)throw new Error('A Ranger did not claim a job for itself');
+    await call(ids[i],'confirmPlaced',[1,100+i,'kinematic']);
+    before.push(await call(ids[i],'inspect'));
     physicsBefore.push(await call(ids[i],'authorizePhysics',[JSON.stringify({sequence:1,swing:'left',tilt:3,leftContact:true,rightContact:true})]));
   }
   await runtime!.stop();runtime=undefined;await start();
@@ -46,6 +50,8 @@ try {
   for(let i=0;i<4;i++){
     const next=await call(ids[i],'decide',[JSON.stringify({epoch:2,sequence:2,mode:'roam',x:0,z:0})]);
     if(next.sequence!==2||next.decisions!==2||next.docked)throw new Error('Restored actor could not continue its sequence');
+    const claim=await call(ids[i],'decideBuild',[JSON.stringify({sequence:2,x:0,z:0,open:[]})]);
+    if(claim.sequence!==2||claim.placed[0]?.slotId!==100+i||claim.placed[0]?.evidence!=='kinematic'||claim.action!=='idle')throw new Error('Restored actor lost its placement receipts');
   }
-  console.log('PASS: 4 actor records, docking receipts, and owned physics plans survived a full local-runtime stop/start; 4 activations changed; all 4 continued with decision 2.');
+  console.log('PASS: 4 actor records, docking receipts, placement receipts, and owned physics plans survived a full local-runtime stop/start; 4 activations changed; all 4 continued with decision 2.');
 } finally {clearTimeout(deadline);await runtime?.stop();}

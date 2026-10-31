@@ -6,7 +6,7 @@ The next robotics milestone is an independent humanoid that walks and picks up o
 
 ## New: four-Ranger assembly world
 
-A separate, lightweight Three.js world now sits alongside David's original Go1 motion lab. Four complete, articulated Ranger-style robots roam their own parts of a small island, rendezvous, and visibly fold into a Megazord's four limbs. The shared torso and head are passive geometry, **not a fifth actor**. The same four actor identities survive assembly and separation.
+A separate, lightweight Three.js world now sits alongside David's original Go1 motion lab. Four complete, articulated Ranger-style robots work and roam around a plaza in a procedural city, rendezvous, and visibly fold into a Megazord's four limbs. The shared torso and head are passive geometry, **not a fifth actor**. The same four actor identities survive assembly and separation.
 
 ```bash
 bun install --frozen-lockfile --ignore-scripts
@@ -42,6 +42,14 @@ python3 -I -B -m venv .venv
 
 For agent-run installation, use the explicit isolated environment in `physics/STATUS.md`, not the interactive shell's environment. Restart the world server after installation or a backend update. An older running server can still display the tighter visual model, but cannot provide the new MuJoCo action until restarted.
 
+### City and job site (kinematic preview)
+
+The world sits in a procedural city, with one chase camera per Ranger while they are apart and a single camera once combined. While split, four builders put up a 3×3×3 stack of crates on a slab north of the plaza, then carry two long beams in pairs. **Frame team** and **Assembly view** switch to a free orbit camera, and **Chase** switches back.
+
+Each `WorldRanger` chooses its own next job (`decideBuild`), saves that claim, and saves a receipt per slot (`confirmPlaced`). The world starts no work on a slot until the claim is saved, and a beam does not lift until both carriers are in place. Crate colours show who placed what.
+
+**This is not physical construction.** Walking, lifting and placing are timed animation, and crates are not simulated objects. Every receipt it writes says `evidence: "kinematic"`, which is not proof of a placement; `measured` is reserved for a physical adapter reporting contact and support measurements, and no such adapter exists yet. Building stops during assembly, in combined form and in the MuJoCo rig, and picks up again afterward. Like other world state, the structure is in memory and does not survive a launcher restart, though the actors' records do.
+
 ### What this prototype does—and does not—prove
 
 **Independent roaming, transformation, docking, and separation in this browser world are still kinematic.** Combined walking is now real MuJoCo locomotion on a simplified flat-ground biped rig, not yet the exact decorative Ranger meshes converted into one continuous physical mechanism. Entering that rig initializes a separate physics episode; leaving it returns to the visual assembly rails. Autonomous physical docking, terrain navigation, learned control, and integrating the independent Ranger bench into this world remain future work. The planners are numeric; there are **no model calls**. Coordination uses the local world barrier and Terse RPC, not Inkwell or Agent Relay.
@@ -51,7 +59,7 @@ Actor records are durable, but world poses, simulation time, and the last 120 lo
 Bounded checks for this new mode (do not run concurrently with the simulator):
 
 ```bash
-bun --no-env-file test actors/world.test.ts
+bun --no-env-file test actors/world.test.ts actors/world-city.test.ts
 bun --no-env-file actors/node_modules/typescript/bin/tsc -p actors/tsconfig.world.json
 python3 -I -B tests/test_world_launcher.py
 python3 -I -B tests/test_physics_admission.py
