@@ -98,39 +98,61 @@ def smooth(t: float) -> float:
 
 
 class Biped:
-    def __init__(self, external_policy=False, gait="cautious", model_source=None):
+    def __init__(self, external_policy=False, gait="cautious", model_source=None, *, model=None, data=None, prefix=""):
         if gait not in GAITS:
             raise ValueError("Choose a supported gait profile")
         self.gait_name, self.gait = gait, GAITS[gait]
         self.external_policy = external_policy
-        self.model = mujoco.MjModel.from_xml_string(model_xml() if model_source is None else model_source)
-        self.data = mujoco.MjData(self.model)
+        if (model is None) != (data is None):
+            raise ValueError("A shared controller needs both model and data")
+        self.shared, self.prefix = model is not None, prefix
+        self.model = model if self.shared else mujoco.MjModel.from_xml_string(model_xml() if model_source is None else model_source)
+        self.data = data if self.shared else mujoco.MjData(self.model)
         self.reference = mujoco.MjData(self.model)
         self.scratch = mujoco.MjData(self.model)
         self.jp = np.zeros((3, self.model.nv))
         self.jr = np.zeros((3, self.model.nv))
-        self.pelvis = self.model.body("pelvis").id
+        self.pelvis = self.model.body(self.name("pelvis")).id
         self.floor = self.model.geom("floor").id
-        self.joints = {s: np.array([self.model.joint(f"{s}_{p}").id for p in PARTS]) for s in SIDES}
+        root = self.model.joint(self.name("root")).id
+        self.root_q = int(self.model.jnt_qposadr[root])
+        self.root_v = int(self.model.jnt_dofadr[root])
+        self.origin = self.model.qpos0[self.root_q:self.root_q+3].copy()
+        self.joints = {s: np.array([self.model.joint(self.name(f"{s}_{p}")).id for p in PARTS]) for s in SIDES}
         self.qids = {s: self.model.jnt_qposadr[ids] for s, ids in self.joints.items()}
         self.dofs = {s: self.model.jnt_dofadr[ids] for s, ids in self.joints.items()}
-        self.acts = {s: np.array([self.model.actuator(f"{s}_{p}").id for p in PARTS]) for s in SIDES}
-        self.sites = {s: self.model.site(f"{s}_sole_center").id for s in SIDES}
-        self.soles = {s: self.model.geom(f"{s}_sole").id for s in SIDES}
-        self.reset()
+        self.acts = {s: np.array([self.model.actuator(self.name(f"{s}_{p}")).id for p in PARTS]) for s in SIDES}
+        self.sites = {s: self.model.site(self.name(f"{s}_sole_center")).id for s in SIDES}
+        self.soles = {s: self.model.geom(self.name(f"{s}_sole")).id for s in SIDES}
+        self._initialize_pose()
+
+    def name(self, local):
+        return self.prefix+local
+
+    @property
+    def root_position(self):
+        return self.data.qpos[self.root_q:self.root_q+3]
 
     def reset(self):
-        mujoco.mj_resetData(self.model, self.data)
+        if self.shared:
+            raise ValueError("Only the shared world may reset its physics")
+        self._initialize_pose()
+
+    def _initialize_pose(self):
+        if not self.shared:
+            mujoco.mj_resetData(self.model, self.data)
+        elif self.data.time != 0:
+            raise ValueError("Initialize shared controllers only before integration")
         for side in SIDES:
             self.data.qpos[self.qids[side]] = [0, 0, -.45, .9, -.45, 0]
-        self.data.qpos[2] = 2*.46*math.cos(.45)+.12
+        self.data.qpos[self.root_q+2] = 2*.46*math.cos(.45)+.12
         mujoco.mj_forward(self.model, self.data)
         self.targets = np.array([self.data.qpos[self.model.jnt_qposadr[j]] for j in self.model.actuator_trnid[:, 0]])
         self.anchors = {s: self.foot(s).copy() for s in SIDES}
         for anchor in self.anchors.values():
             anchor[2] = 0.
-        self.body_target = self.data.qpos[:3].copy()
-        self.com_offset = self.data.subtree_com[self.pelvis] - self.data.qpos[:3]
+        self.body_target = self.root_position.copy()
+        self.com_offset = self.data.subtree_com[self.pelvis] - self.root_position
         self.phase = "standing"
         self.tick = 0
         self.phase_tick = 0
@@ -142,7 +164,7 @@ class Biped:
         self.shift_target = self.body_target.copy()
         self.swing_origin = self.anchors[self.swing].copy()
         self.swing_target = self.swing_origin.copy()
-        self.start = self.data.qpos[:3].copy()
+        self.start = self.root_position.copy()
         self.max_tilt = 0.
         self.max_air = {s: 0. for s in SIDES}
         self.air_ticks = {s: 0 for s in SIDES}
@@ -224,7 +246,7 @@ class Biped:
         qids, dofs = self.qids[side], self.dofs[side]
         scratch.qpos[qids] = self.targets[self.acts[side]]
         limits = self.model.jnt_range[self.joints[side]]
-        foot_body = self.model.body(f"{side}_foot").id
+        foot_body = self.model.body(self.name(f"{side}_foot")).id
         for _ in range(12):
             mujoco.mj_kinematics(self.model, scratch)
             mujoco.mj_comPos(self.model, scratch)
@@ -248,14 +270,14 @@ class Biped:
             com = self.data.subtree_com[self.pelvis]
             stable = (elapsed >= self.gait["shift"] and all(self.contacts().values()) and
                       np.linalg.norm(com[:2]-self.anchors[support][:2]) < .055 and
-                      np.linalg.norm(self.data.qvel[:2]) < .08)
+                      np.linalg.norm(self.data.qvel[self.root_v:self.root_v+2]) < .08)
             self.ready = self.ready+1 if stable else 0
             if self.ready >= 8:
                 self.phase, self.phase_tick = "swing", self.tick
                 self.swing_origin = self.anchors[self.swing].copy()
                 self.swing_target = self.swing_origin.copy()
                 self.swing_target[0] = self.anchors[support][0]+.12
-                self.swing_target[1] = -.255 if self.swing == "left" else .255
+                self.swing_target[1] = self.origin[1]+(-.255 if self.swing == "left" else .255)
                 self.swing_air_ticks, self.swing_height = 0, 0.
                 elapsed = 0
                 self.event(f"Lift {self.swing}; other foot supplies support.")
@@ -272,7 +294,7 @@ class Biped:
             feet[self.swing][2] = -.003
             if elapsed > self.gait["landing"] and all(self.contacts().values()) and self.swing_air_ticks >= 5 and self.swing_height > .02 and self.foot(self.swing)[0]-self.swing_origin[0] > .025:
                 self.step_evidence.append({"side": self.swing, "time": self.tick*DT,
-                                           "forward": float(self.data.qpos[0]-self.start[0]),
+                                           "forward": float(self.root_position[0]-self.start[0]),
                                            "air_ticks": self.swing_air_ticks, "clearance": self.swing_height,
                                            "travel": float(self.foot(self.swing)[0]-self.swing_origin[0])})
                 self.step_evidence = self.step_evidence[-60:]
@@ -289,19 +311,21 @@ class Biped:
 
         # IK changes only a scratch model. The real free body is never set here.
         self.reference.qpos[:] = self.data.qpos
-        self.reference.qpos[:3] = self.body_target
-        self.reference.qpos[3:7] = [1, 0, 0, 0]
+        self.reference.qpos[self.root_q:self.root_q+3] = self.body_target
+        self.reference.qpos[self.root_q+3:self.root_q+7] = [1, 0, 0, 0]
         for side in SIDES:
             angles = self.ik(side, feet[side], self.reference)
             ids = self.acts[side]
             self.targets[ids] = angles
             self.data.ctrl[ids] = angles
         for side in SIDES:
-            shoulder = self.model.actuator(f"{side}_shoulder").id
-            elbow = self.model.actuator(f"{side}_elbow").id
+            shoulder = self.model.actuator(self.name(f"{side}_shoulder")).id
+            elbow = self.model.actuator(self.name(f"{side}_elbow")).id
             self.data.ctrl[shoulder], self.data.ctrl[elbow] = self.arm_targets[side]
 
     def step(self, ticks=1):
+        if self.shared:
+            raise ValueError("Shared physics advances once through its world, not through a controller")
         if type(ticks) is not int or not 1 <= ticks <= 50:
             raise ValueError("Advance 1–50 bounded control ticks")
         for _ in range(ticks):
@@ -314,28 +338,32 @@ class Biped:
             for _ in range(5):
                 mujoco.mj_step(self.model, self.data)
             mujoco.mj_forward(self.model, self.data)
-            self.tick += 1
-            up = self.data.xmat[self.pelvis].reshape(3, 3)[2, 2]
-            tilt = math.degrees(math.acos(float(np.clip(up, -1, 1))))
-            self.max_tilt = max(self.max_tilt, tilt)
-            contacts = self.contacts()
-            if self.phase in ("swing", "landing"):
-                self.swing_air_ticks += int(not contacts[self.swing])
-                self.swing_height = max(self.swing_height, float(self.foot(self.swing)[2]))
-            for side in SIDES:
-                self.max_air[side] = max(self.max_air[side], float(self.foot(side)[2]))
-                self.air_ticks[side] += int(not contacts[side])
-            if self.data.qpos[2] < .65 or tilt > 30 or not np.isfinite(self.data.qpos).all():
-                self.failed = "Robot fell or left the finite-state safety envelope"
+            self.observe_step()
+
+    def observe_step(self):
+        """Read the authoritative post-integration state; never advance physics here."""
+        self.tick += 1
+        up = self.data.xmat[self.pelvis].reshape(3, 3)[2, 2]
+        tilt = math.degrees(math.acos(float(np.clip(up, -1, 1))))
+        self.max_tilt = max(self.max_tilt, tilt)
+        contacts = self.contacts()
+        if self.phase in ("swing", "landing"):
+            self.swing_air_ticks += int(not contacts[self.swing])
+            self.swing_height = max(self.swing_height, float(self.foot(self.swing)[2]))
+        for side in SIDES:
+            self.max_air[side] = max(self.max_air[side], float(self.foot(side)[2]))
+            self.air_ticks[side] += int(not contacts[side])
+        if self.root_position[2] < .65 or tilt > 30 or not np.isfinite(self.data.qpos).all():
+            self.failed = "Robot fell or left the finite-state safety envelope"
 
     def state(self, geometry=False):
         result = {"tick": self.tick, "time": self.tick*DT, "phase": self.phase, "steps": self.steps,
                   "gait": self.gait_name,
                   "gait_timing": dict(self.gait),
                   "phase_seconds": {p: ticks*DT for p, ticks in self.phase_ticks.items()},
-                  "walking": self.walking, "failed": self.failed, "body": self.data.qpos[:7].tolist(),
+                  "walking": self.walking, "failed": self.failed, "body": self.data.qpos[self.root_q:self.root_q+7].tolist(),
                   "awaiting_actors": self.awaiting, "next_swing": SIDES[self.steps % 2],
-                  "forward": float(self.data.qpos[0]-self.start[0]), "lateral": float(self.data.qpos[1]-self.start[1]),
+                  "forward": float(self.root_position[0]-self.start[0]), "lateral": float(self.root_position[1]-self.start[1]),
                   "max_tilt_deg": self.max_tilt, "contacts": self.contacts(), "max_foot_height": self.max_air,
                   "com": self.data.subtree_com[self.pelvis].tolist(), "body_target": self.body_target.tolist(),
                   "feet": {s: self.foot(s).tolist() for s in SIDES},

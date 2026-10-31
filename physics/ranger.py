@@ -66,20 +66,27 @@ def model_xml():
 
 
 class Ranger(locomotion.Biped):
-    def __init__(self, delivery=False):
+    def __init__(self, delivery=False, *, model=None, data=None, prefix="", owner_slot=0, destination=None):
+        if type(owner_slot) is not int or not 0 <= owner_slot < 4:
+            raise ValueError("Use one of four hardware slots")
         self.delivery = delivery
-        super().__init__(gait="brisk", model_source=model_xml())
-        self.arm_joints = {s: np.array([self.model.joint(f"{s}_{p}").id for p in ARM_PARTS]) for s in SIDES}
+        self.owner_slot = owner_slot
+        self.object_id, self.destination_id = f"cargo-{owner_slot}", f"station-{owner_slot+1}"
+        self.destination = np.array(DESTINATION if destination is None else destination, dtype=float)
+        if self.destination.shape != (3,) or not np.isfinite(self.destination).all():
+            raise ValueError("A finite destination is required")
+        super().__init__(gait="brisk", model_source=model_xml() if model is None else None, model=model, data=data, prefix=prefix)
+        self.arm_joints = {s: np.array([self.model.joint(self.name(f"{s}_{p}")).id for p in ARM_PARTS]) for s in SIDES}
         self.arm_qids = {s: self.model.jnt_qposadr[j] for s, j in self.arm_joints.items()}
         self.arm_dofs = {s: self.model.jnt_dofadr[j] for s, j in self.arm_joints.items()}
-        self.arm_acts = {s: np.array([self.model.actuator(f"{s}_{p}").id for p in ARM_PARTS]) for s in SIDES}
-        self.hand_sites = {s: self.model.site(f"{s}_grasp").id for s in SIDES}
-        self.fingers = {s: [self.model.geom(f"{s}_finger_{i}").id for i in range(2)] for s in SIDES}
-        self.finger_acts = {s: [self.model.actuator(f"{s}_finger_{i}").id for i in range(2)] for s in SIDES}
-        self.cargo, self.cargo_geom = self.model.body("cargo").id, self.model.geom("cargo").id
-        self.stand_geom = self.model.geom("pickup_stand").id
-        self.destination_geom = self.model.geom("destination_stand").id
-        self.cargo_dof = self.model.jnt_dofadr[self.model.joint("cargo_root").id]
+        self.arm_acts = {s: np.array([self.model.actuator(self.name(f"{s}_{p}")).id for p in ARM_PARTS]) for s in SIDES}
+        self.hand_sites = {s: self.model.site(self.name(f"{s}_grasp")).id for s in SIDES}
+        self.fingers = {s: [self.model.geom(self.name(f"{s}_finger_{i}")).id for i in range(2)] for s in SIDES}
+        self.finger_acts = {s: [self.model.actuator(self.name(f"{s}_finger_{i}")).id for i in range(2)] for s in SIDES}
+        self.cargo, self.cargo_geom = self.model.body(self.name("cargo")).id, self.model.geom(self.name("cargo")).id
+        self.stand_geom = self.model.geom(self.name("pickup_stand")).id
+        self.destination_geom = self.model.geom(self.name("destination_stand")).id
+        self.cargo_dof = self.model.jnt_dofadr[self.model.joint(self.name("cargo_root")).id]
         self.reset_job_state()
 
     def reset(self):
@@ -122,6 +129,11 @@ class Ranger(locomotion.Biped):
         return list(touches.values()), list(forces.values())
 
     def cargo_supported(self):
+        if self.shared:
+            # A different robot or stand must not masquerade as an unsupported grip.
+            return any(self.cargo_geom in (c.geom1, c.geom2) and c.dist < .001 and
+                       next(g for g in (c.geom1, c.geom2) if g != self.cargo_geom) not in self.fingers["right"]
+                       for c in self.data.contact[:self.data.ncon])
         return any(self.cargo_geom in (c.geom1, c.geom2) and
                    any(g in (c.geom1, c.geom2) for g in (self.floor, self.stand_geom, self.destination_geom))
                    and c.dist < .001 for c in self.data.contact[:self.data.ncon])
@@ -151,15 +163,18 @@ class Ranger(locomotion.Biped):
                 wrench = np.zeros(6)
                 mujoco.mj_contactForce(self.model, self.data, index, wrench)
                 force += abs(float(wrench[0]))
-            if self.model.body_rootid[self.model.geom_bodyid[other]] == self.pelvis:
+            # In a shared world, contact with ANY robot disqualifies released placement.
+            other_body = self.model.geom_bodyid[other]
+            other_root = self.model.body_rootid[other_body]
+            if other_root in getattr(self, "robot_roots", {self.pelvis}):
                 robot_contact = True
-        error = self.data.xpos[self.cargo]-DESTINATION
+        error = self.data.xpos[self.cargo]-self.destination
         speed = float(np.linalg.norm(self.data.qvel[self.cargo_dof:self.cargo_dof+3]))
         tilt = math.degrees(math.acos(float(np.clip(self.data.xmat[self.cargo].reshape(3, 3)[2, 2], -1, 1))))
-        finger_open = all(self.data.qpos[self.model.jnt_qposadr[self.model.joint(f"right_finger_{i}").id]] < .01 for i in range(2))
+        finger_open = all(self.data.qpos[self.model.jnt_qposadr[self.model.joint(self.name(f"right_finger_{i}")).id]] < .01 for i in range(2))
         positioned = float(np.linalg.norm(error[:2])) < .025 and abs(float(error[2])) < .015 and tilt < 8
-        return {"destination_id": "station-1", "position": self.data.xpos[self.cargo].tolist(),
-                "target": DESTINATION.tolist(), "support_force": force, "robot_contact": robot_contact,
+        return {"destination_id": self.destination_id, "position": self.data.xpos[self.cargo].tolist(),
+                "target": self.destination.tolist(), "support_force": force, "robot_contact": robot_contact,
                 "linear_speed": speed, "tilt_deg": tilt, "fingers_open": finger_open,
                 "positioned": positioned, "valid": positioned and force > .5 and speed < .02 and finger_open and not robot_contact}
 
@@ -169,7 +184,7 @@ class Ranger(locomotion.Biped):
         qids, dofs, acts = self.arm_qids[side], self.arm_dofs[side], self.arm_acts[side]
         scratch.qpos[qids] = self.targets[acts]
         limits = self.model.jnt_range[self.arm_joints[side]]
-        hand = self.model.body(f"{side}_hand").id
+        hand = self.model.body(self.name(f"{side}_hand")).id
         for _ in range(20):
             mujoco.mj_kinematics(self.model, scratch)
             mujoco.mj_comPos(self.model, scratch)
@@ -202,7 +217,7 @@ class Ranger(locomotion.Biped):
                 self.pickup_target[2] += .045
                 self.pregrasp_target = self.pickup_target+np.array([0., 0., .2])
                 self.raise_target = self.pickup_target.copy()
-                self.raise_target[0] = self.data.qpos[0]+.17
+                self.raise_target[0] = self.root_position[0]+.17
                 self.raise_target[2] += .125
                 self.set_job("raise")
                 elapsed = 0
@@ -254,7 +269,7 @@ class Ranger(locomotion.Biped):
             self.lift_samples = self.lift_samples+1 if valid else 0
             if elapsed >= 2.5 and self.lift_samples >= 30:
                 self.receipts.append({"event": "unsupported_lift", "time": self.tick*DT, "lift": lift, "forces": forces})
-                self.carry_offset = self.hand_target-self.data.qpos[:3]
+                self.carry_offset = self.hand_target-self.root_position
                 self.carry_start = self.data.xpos[self.cargo].copy()
                 self.job_goal_steps = self.steps+2
                 self.mode(True)
@@ -262,7 +277,7 @@ class Ranger(locomotion.Biped):
             elif elapsed > 5:
                 self.failed = "Cargo did not remain lifted through finger contact"
         if self.job == "carry":
-            self.hand_target = self.data.qpos[:3]+self.carry_offset
+            self.hand_target = self.root_position+self.carry_offset
             contacts, _ = self.grip_contacts()
             if not all(contacts) or self.cargo_supported():
                 self.failed = "Cargo lost contact or returned to support during carry"
@@ -271,7 +286,7 @@ class Ranger(locomotion.Biped):
                                       "distance": float(self.data.xpos[self.cargo][0]-self.carry_start[0])})
                 self.set_job("holding")
         if self.job == "holding":
-            self.hand_target = self.data.qpos[:3]+self.carry_offset
+            self.hand_target = self.root_position+self.carry_offset
             contacts, forces = self.grip_contacts()
             if not all(contacts) or min(forces) <= .3 or self.cargo_supported():
                 self.failed = "Cargo did not remain physically held"
@@ -283,10 +298,10 @@ class Ranger(locomotion.Biped):
                 elapsed = 0
         if self.job == "center_for_place":
             self.body_target = self.body_origin+smooth(elapsed/2)*(self.body_center-self.body_origin)
-            self.hand_target = self.data.qpos[:3]+self.carry_offset
+            self.hand_target = self.root_position+self.carry_offset
             if elapsed >= 2.5:
                 self.hand_origin = self.hand_target.copy()
-                self.place_target = DESTINATION+(self.data.site_xpos[self.hand_sites["right"]]-self.data.xpos[self.cargo])
+                self.place_target = self.destination+(self.data.site_xpos[self.hand_sites["right"]]-self.data.xpos[self.cargo])
                 self.place_target[2] -= .002
                 self.place_above = self.place_target+np.array([0., 0., .15])
                 self.set_job("place_reach")
@@ -352,12 +367,12 @@ class Ranger(locomotion.Biped):
                       arm_angles=self.data.qpos[self.arm_qids["right"]].tolist(),
                       arm_targets=self.targets[self.arm_acts["right"]].tolist(),
                       hand_target=None if self.hand_target is None else self.hand_target.tolist(),
-                      manipulation_receipts=[dict(r, object_id="cargo-0", owner_slot=0, job_id=self.job_id) for r in self.receipts],
+                      manipulation_receipts=[dict(r, object_id=self.object_id, owner_slot=self.owner_slot, job_id=self.job_id) for r in self.receipts],
                       job_id=self.job_id, delivery=self.delivery, placement=self.placement_observation(),
                       actor_binding=None,
-                      objects=[{"id": "cargo-0", "position": self.data.xpos[self.cargo].tolist(),
+                      objects=[{"id": self.object_id, "position": self.data.xpos[self.cargo].tolist(),
                                 "quaternion": self.data.xquat[self.cargo].tolist(), "mass_kg": .12,
-                                "held_by": {"slot": 0, "hand": "right"} if held else None,
+                                "held_by": {"slot": self.owner_slot, "hand": "right"} if held else None,
                                 "supported": self.cargo_supported(), "placed": self.placed and self.placement_observation()["valid"]}])
         return result
 
