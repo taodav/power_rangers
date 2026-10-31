@@ -9,6 +9,8 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,6 +42,31 @@ def gate():
     return admission(os.getloadavg()[0], measured.stdout)
 
 
+def preview_gate():
+    """Yield to the human's two known local demos; never inspect or print credentials/argv."""
+    for port in (8771, 8773):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state", timeout=1) as response:
+                raw = response.read(1000001)
+            if len(raw) > 1000000:
+                raise RuntimeError("Preview state exceeds its observation bound")
+            try:
+                state = json.loads(raw)
+                if not isinstance(state, dict):
+                    raise ValueError("Expected a preview object")
+            except (ValueError, UnicodeError):
+                raise RuntimeError("Could not interpret user preview state safely") from None
+            builder = state.get("builder")
+            if builder is not None and not isinstance(builder, dict):
+                raise RuntimeError("Could not interpret the user preview's builder state")
+            # The world server stops its worker when it latches an error; retained poses are not a running trial.
+            if (state.get("physics") and not state.get("error")) or (builder and builder.get("status") not in ("complete", "error")):
+                raise RuntimeError("A user preview owns native physics; yielding this test round")
+        except urllib.error.URLError as error:
+            if not isinstance(error.reason, ConnectionRefusedError):
+                raise RuntimeError("Could not establish whether a user preview is active") from None
+
+
 def main():
     if not (sys.flags.isolated and sys.flags.dont_write_bytecode):
         raise RuntimeError("Run this wrapper with Python -I -B")
@@ -52,20 +79,26 @@ def main():
     parser.add_argument("--compare-gaits", action="store_true")
     parser.add_argument("--ranger", action="store_true")
     parser.add_argument("--deliver", action="store_true")
+    parser.add_argument("--herd", action="store_true")
+    parser.add_argument("--yield-to-previews", action="store_true")
     args = parser.parse_args()
     if not 0 < args.seconds <= 90:
         parser.error("Use 0–90 simulated seconds")
     print(json.dumps({"admission": gate()}), flush=True)
+    if args.yield_to_previews:
+        preview_gate()
     if args.gate_only:
         return
     command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / "physics/megazord.py"), "--trial", str(args.seconds), "--gait", args.gait]
     if not args.walk:
         command.append("--stand")
     if args.test:
-        test = "tests/test_ranger.py" if args.ranger else "tests/test_megazord.py"
+        test = "tests/test_herd.py" if args.herd else "tests/test_ranger.py" if args.ranger else "tests/test_megazord.py"
         command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / test)]
     elif args.compare_gaits:
         command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / "physics/megazord.py"), "--compare-gaits", str(args.seconds)]
+    elif args.herd:
+        command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / "physics/herd.py"), "--trial", str(args.seconds)]
     elif args.ranger:
         command = [str(ROOT / ".venv/bin/python"), "-I", "-B", str(ROOT / "physics/ranger.py"), "--trial", str(args.seconds)]
         if args.deliver:
@@ -79,10 +112,12 @@ def main():
             if remaining <= 0:
                 raise TimeoutError("Five-minute wall-clock bound reached")
             try:
-                output, errors = child.communicate(timeout=min(5, remaining))
+                output, errors = child.communicate(timeout=min(.5 if args.yield_to_previews else 5, remaining))
                 break
             except subprocess.TimeoutExpired:
                 gate()
+                if args.yield_to_previews:
+                    preview_gate()
     except (RuntimeError, TimeoutError, KeyboardInterrupt):
         os.killpg(child.pid, signal.SIGTERM)
         try:

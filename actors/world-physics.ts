@@ -9,14 +9,17 @@ export class PhysicsWorker {
   private checked=0;
   private lifetime:ReturnType<typeof setTimeout>;
   private root:string;
+  private kind:'combined'|'ranger'|'herd';
   private environment:Record<string,string>;
-  constructor(root:string,kind:'combined'|'ranger'='combined') {
-    if(kind!=='combined'&&kind!=='ranger')throw new Error('Unknown native model');
+  constructor(root:string,kind:'combined'|'ranger'|'herd'='combined') {
+    if(!['combined','ranger','herd'].includes(kind))throw new Error('Unknown native model');
+    this.kind=kind;
     this.root=root;
     this.environment={HOME:resolve(root,'.cache/world/home'),TMPDIR:resolve(root,'.cache/world/tmp'),PATH:'/usr/bin:/bin',LANG:'en_US.UTF-8',
       OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1',VECLIB_MAXIMUM_THREADS:'1'};
     this.checkGate();
-    this.process=Bun.spawn([resolve(root,'.venv/bin/python'),'-I','-B',resolve(root,kind==='ranger'?'physics/ranger.py':'physics/megazord.py'),...(kind==='ranger'?['--worker']:[])],{
+    const source={combined:'physics/megazord.py',ranger:'physics/ranger.py',herd:'physics/herd.py'}[kind];
+    this.process=Bun.spawn([resolve(root,'.venv/bin/python'),'-I','-B',resolve(root,source),...(kind!=='combined'?['--worker']:[])],{
       cwd:root,env:this.environment,stdin:'pipe',stdout:'pipe',stderr:'ignore'});
     this.lifetime=setTimeout(()=>{this.fail(new Error('Five-minute native trial limit reached'));this.process.kill();},300000);
     void this.read();
@@ -24,8 +27,8 @@ export class PhysicsWorker {
   }
   private checkGate() {
     if(Date.now()-this.started>=300000)throw new Error('The five-minute native trial limit was reached');
-    if(Date.now()-this.checked<5000)return;
-    const result=Bun.spawnSync([resolve(this.root,'.venv/bin/python'),'-I','-B',resolve(this.root,'physics/run_bounded.py'),'--gate-only'],{
+    if(Date.now()-this.checked<(this.kind==='herd'?500:5000))return;
+    const result=Bun.spawnSync([resolve(this.root,'.venv/bin/python'),'-I','-B',resolve(this.root,'physics/run_bounded.py'),'--gate-only',...(this.kind==='herd'?['--yield-to-previews']:[])],{
       cwd:this.root,env:this.environment,stdout:'pipe',stderr:'ignore',timeout:6000});
     if(result.exitCode!==0)throw new Error('Native physics host gate refused; check load and swap before restarting');
     this.checked=Date.now();

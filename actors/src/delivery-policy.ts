@@ -26,11 +26,11 @@ const isPosition = (v:unknown):v is number[] => Array.isArray(v) && v.length ===
  * Saves one authorized job. An exact retry changes nothing. Refused: another Ranger's hardware, a skipped
  * sequence, a reused job ID, or any new job while one is still active.
  */
-export function authorize(record:DeliveryRecord|null, slot:number, input:string):DeliveryRecord {
+export function authorize(record:DeliveryRecord|null, slot:number, input:string, stations=STATIONS):DeliveryRecord {
   const r = JSON.parse(input) as DeliveryRequest;
   if (!r || !Number.isSafeInteger(r.sequence) || r.sequence < 1 || !isName(r.jobId) || !isName(r.objectId) || !isName(r.destinationId))
     throw new Error("Invalid delivery request");
-  if (!Object.hasOwn(STATIONS, r.destinationId)) throw new Error("Unknown destination");
+  if (!Object.hasOwn(stations, r.destinationId)) throw new Error("Unknown destination");
   if (r.ownerSlot !== slot) throw new Error("A Ranger can only authorize work on its own hardware");
   if (r.nativeReady !== true) throw new Error("The native worker is not ready");
   if (record && r.sequence === record.sequence) {
@@ -45,7 +45,7 @@ export function authorize(record:DeliveryRecord|null, slot:number, input:string)
 }
 
 /** Why this receipt can't count as a placement of this job, or null if it can. */
-export function refuseReceipt(record:DeliveryRecord, jobId:string, t:PlacedReceipt):string|null {
+export function refuseReceipt(record:DeliveryRecord, jobId:string, t:PlacedReceipt, stations=STATIONS):string|null {
   if (!t || t.event !== "placed") return "This is not a placed receipt";
   if (t.job_id !== jobId || t.object_id !== record.objectId || t.owner_slot !== record.ownerSlot || t.destination_id !== record.destinationId) return "The receipt is for a different job";
   if (t.evidence !== "measured") return "A delivery needs measured evidence";
@@ -60,7 +60,8 @@ export function refuseReceipt(record:DeliveryRecord, jobId:string, t:PlacedRecei
   if (t.robot_contact !== false) return "The robot is still touching the object";
   if (t.positioned !== true || t.valid !== true) return "The native checks did not pass";
   if (!isPosition(t.position) || !isPosition(t.target)) return "The receipt has malformed positions";
-  const station = STATIONS[record.destinationId];
+  const station = stations[record.destinationId];
+  if (!isPosition(station)) return "Unknown destination";
   if (t.target.some((value, axis) => value !== station[axis])) return "The receipt's target is not this station";
   const [x, y, z] = t.position, [a, b, c] = station;
   if (Math.hypot(x - a, y - b) >= PLACEMENT.horizontal || Math.abs(z - c) >= PLACEMENT.vertical) return "The object is not on the target";
@@ -68,14 +69,14 @@ export function refuseReceipt(record:DeliveryRecord, jobId:string, t:PlacedRecei
 }
 
 /** Saves the exact receipt once and marks the job placed. An exact retry changes nothing. */
-export function confirm(record:DeliveryRecord|null, jobId:string, receiptJson:string):DeliveryRecord {
+export function confirm(record:DeliveryRecord|null, jobId:string, receiptJson:string, stations=STATIONS):DeliveryRecord {
   if (!record || record.jobId !== jobId) throw new Error("No delivery with this job ID");
   if (record.status === "placed") {
     if (record.receiptInput !== receiptJson) throw new Error("This job already has a different receipt");
     return record;
   }
   if (record.status !== "authorized") throw new Error("This job was cancelled");
-  const receipt = JSON.parse(receiptJson) as PlacedReceipt, refusal = refuseReceipt(record, jobId, receipt);
+  const receipt = JSON.parse(receiptJson) as PlacedReceipt, refusal = refuseReceipt(record, jobId, receipt, stations);
   if (refusal) throw new Error(refusal);
   return {...record, status:"placed", receipt, receiptInput:receiptJson};
 }
