@@ -153,7 +153,9 @@ function showBuilder(state, builder, $) {
   $('phase-title').textContent = progress.title;
   $('phase-description').textContent = progress.detail;
   $('scene-state').textContent = 'MUJOCO · ONE PHYSICAL RANGER';
-  $('scene-detail').textContent = 'Drawn from measured poses. The job site waits until this run stops.';
+  $('scene-detail').textContent = builder.playback > 1
+    ? `Drawn from measured poses, playing at ${builder.playback}× real time. Same physics, shown faster.`
+    : 'Drawn from measured poses. The job site waits until this run stops.';
   $('mega-name').textContent = ranger.name.toUpperCase();
   $('mega-note').textContent = progress.delivered ? 'delivered' : progress.failed ? 'stopped' : builder.status;
   const list = $('builder-steps');
