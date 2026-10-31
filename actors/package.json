@@ -1,0 +1,8 @@
+{
+  "name": "power-rangers-actors",
+  "private": true,
+  "type": "module",
+  "scripts": {"dev": "terse actor dev", "check": "tsc --noEmit", "test": "bun test"},
+  "dependencies": {"terse-sdk": "0.14.9", "terse-cli": "0.14.9"},
+  "devDependencies": {"typescript": "7.0.2", "@types/bun": "1.4.4"}
+}

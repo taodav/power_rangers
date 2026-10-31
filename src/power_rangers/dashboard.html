@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Power Rangers · Motion Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1119;--panel:#151b26;--line:#2b3444;--muted:#98a6ba;--text:#e9eef7;--blue:#8fc6ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,sans-serif}main{max-width:1440px;margin:auto;padding:30px 36px}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}.eyebrow{font-size:11px;letter-spacing:2.6px;color:var(--blue);font-weight:700}h1{font-size:29px;letter-spacing:-1px;margin:8px 0 6px;font-weight:650}p{color:var(--muted);line-height:1.5;margin:0}.badge{border:1px solid var(--line);border-radius:30px;padding:9px 13px;font-size:12px;color:var(--muted)}.dot{display:inline-block;width:7px;height:7px;background:#65d6b0;border-radius:50%;margin-right:7px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}.stage-head{padding:16px 20px;display:flex;justify-content:space-between;align-items:center}.small{font-size:12px;color:var(--muted)}#frame{width:100%;display:block;aspect-ratio:1.6;background:#eef0f4;object-fit:contain}.toolbar{display:flex;align-items:center;gap:9px;padding:15px 20px;flex-wrap:wrap}button,select,input{font:inherit}button{border:1px solid #39475c;background:#202c3e;color:var(--text);padding:10px 13px;border-radius:8px;cursor:pointer}button:hover{background:#2c3c54}button:disabled{opacity:.4;cursor:not-allowed}.primary{background:#b5d9ff;color:#112135;border-color:#b5d9ff;font-weight:650}.primary:hover{background:#d3e8ff}.ghost{background:transparent}.spacer{flex:1}.metrics{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}.metric{padding:18px 20px;border-right:1px solid var(--line)}.metric:last-child{border:0}.metric strong{display:block;font:23px ui-monospace,monospace;margin-top:5px}.control{padding:21px}.section-title{font-weight:600;font-size:15px;margin-bottom:16px}.legs-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px}.legpick{font-size:12px;text-align:left;padding:12px 10px;position:relative}.legpick.selected{outline:2px solid var(--leg-color);outline-offset:0}.legpick span{display:block;color:var(--leg-color);font-size:11px;margin-top:3px}label{display:block;font-size:12px;color:var(--muted);margin:17px 0 8px}label output{float:right;color:var(--text);font-variant-numeric:tabular-nums}select{width:100%;padding:10px;background:#111823;border:1px solid var(--line);border-radius:8px;color:var(--text)}input[type=range]{width:100%;accent-color:var(--blue)}.full{width:100%;margin:20px 0 10px}.note{font-size:12px;line-height:1.6;color:var(--muted)}.divider{border-top:1px solid var(--line);margin:20px 0}.mode{font-size:12px;display:flex;align-items:center;gap:8px}.mode input{accent-color:var(--blue)}.rig-note{margin:10px 0 0;color:#e8c585;font-size:12px;line-height:1.5}.states{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:20px}.leg-state{padding:16px;border-top:3px solid var(--leg-color)}.leg-title{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:650}.contact{font-size:10px;font-weight:500;color:#7ed7b7}.air{color:#edc16e}.phase{font-size:19px;margin:14px 0 5px;text-transform:capitalize}.progress{height:4px;background:#2d3544;border-radius:4px;margin:13px 0;overflow:hidden}.progress div{height:100%;background:var(--leg-color);transition:width .1s}.foot{font:11px ui-monospace,monospace;color:var(--muted)}.log{margin-top:20px;padding:20px}.log-head{display:flex;justify-content:space-between}.log-list{margin-top:12px;max-height:130px;overflow:auto}.event{display:flex;gap:16px;border-top:1px solid var(--line);padding:10px 0;font-size:12px}.event time{color:var(--muted);font-family:monospace}.event .result{margin-left:auto;color:#7ed7b7}.event .failed{color:#fc6c85}#message{min-height:35px;margin-top:10px;color:#e8c585;font-size:12px}footer{color:#73829a;font-size:11px;margin-top:20px;display:flex;justify-content:space-between}@media(max-width:1000px){main{padding:20px}.workspace{grid-template-columns:1fr}.states{grid-template-columns:1fr 1fr}.control{display:block}.badge{display:none}}@media(max-width:550px){.states{grid-template-columns:1fr}.metric{padding:12px}.metric strong{font-size:18px}}
+.crawl-panel{padding:18px 22px;margin-bottom:20px;display:grid;grid-template-columns:1fr auto;gap:16px}.crawl-title{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:650}.crawl-title .tag{font-size:10px;letter-spacing:1px;color:#65d6b0;background:#65d6b015;padding:4px 8px;border-radius:4px}.crawl-controls{display:flex;gap:8px;align-items:center}.crawl-controls select{width:auto}.crawl-info{display:flex;gap:26px;flex-wrap:wrap;grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px}.crawl-info strong{display:block;margin-top:4px;font:17px ui-monospace,monospace}.crawl-info .phase-name{font-family:inherit;text-transform:capitalize}.crawl-help{font-size:11px;color:var(--muted);margin-top:7px}.crawl-error{color:#fc6c85}.crawl-strip{grid-column:1/-1;height:3px;background:#2b3444;border-radius:3px;overflow:hidden}.crawl-strip div{height:100%;background:#65d6b0;transition:width .2s}@media(max-width:700px){.crawl-panel{grid-template-columns:1fr}.crawl-controls{flex-wrap:wrap}.crawl-info{gap:15px}}
+
+.actor-panel{padding:20px 22px;margin-bottom:20px}.actor-top{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.actor-controls{display:flex;gap:8px;flex-wrap:wrap}.actor-stats{display:flex;gap:22px;flex-wrap:wrap;margin:16px 0;font:12px ui-monospace,monospace;color:var(--muted)}.ranger-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.ranger-intent{border:1px solid var(--line);border-left:3px solid var(--leg-color);border-radius:7px;padding:10px 12px;font-size:12px}.ranger-intent strong{color:var(--leg-color)}.ranger-intent span{display:block;margin-top:5px;color:var(--muted)}#actorTimeline{max-height:190px;margin-top:16px;overflow:auto}.actor-event{display:grid;grid-template-columns:65px 55px 110px 1fr;gap:9px;border-top:1px solid var(--line);padding:8px 0;font-size:11px;color:var(--muted)}.actor-event b{color:var(--text);font-weight:500}#actorRecovery{color:#65d6b0;font-size:12px;margin-top:12px}#actorError{color:#fc6c85;font-size:12px;margin-top:8px}@media(max-width:700px){.ranger-row{grid-template-columns:1fr 1fr}.actor-event{grid-template-columns:55px 35px 85px 1fr}}
+.goal-controls{display:grid;grid-template-columns:190px 110px repeat(3,minmax(120px,1fr));gap:18px;margin:8px 0 14px}.goal-controls label{margin-top:12px}.goal-presets{display:flex;gap:7px;flex-wrap:wrap}.goal-presets button{padding:7px 11px;font-size:12px}@media(max-width:1000px){.goal-controls{grid-template-columns:1fr 1fr}.goal-controls>div:last-child{grid-column:1/-1}}
+</style>
+</head>
+<body><main>
+<header><div><div class="eyebrow">POWER RANGERS / EXPERIMENT 001</div><h1>One body. Four legs.</h1><p>A motion laboratory for shared embodiment.</p></div><div class="badge"><span class="dot"></span>Local simulation · Go1</div></header>
+<section class="panel crawl-panel">
+<div><div class="crawl-title">Scripted crawl <span class="tag">FREE BODY</span></div><p class="crawl-help">Shift weight → swing one foot → confirm touchdown → transfer support. Joint actuators only.</p></div>
+<div class="crawl-controls"><select id="cycles" aria-label="Crawl cycles"><option value="1">1 cycle</option><option value="3" selected>3 cycles</option><option value="6">6 cycles</option></select><button class="primary" id="crawlStart">Run crawl</button><button class="ghost" id="crawlStop" disabled>Finish &amp; stop</button></div>
+<div class="crawl-info"><div><span class="small">PHASE</span><strong class="phase-name" id="crawlPhase">Ready</strong></div><div><span class="small">FOOT PLACEMENTS</span><strong id="crawlSteps">—</strong></div><div><span class="small">FORWARD TRAVEL</span><strong id="crawlDistance">—</strong></div><div><span class="small">BODY TILT</span><strong id="bodyTilt">—</strong></div><div><span class="small">SUPPORT MARGIN</span><strong id="supportMargin">—</strong></div></div>
+<div class="crawl-strip"><div id="crawlProgress" style="width:0"></div></div><p class="crawl-help" id="crawlHelp">Run crawl resets the episode with the rig disabled. Orange marker: projected center of mass. Green outline: contacting feet.</p>
+</section>
+<section class="panel actor-panel">
+<div class="actor-top"><div><div class="crawl-title">Durable Rangers <span class="tag">TERSE</span></div><p class="crawl-help">Four Rangers propose footholds from the shared velocity goal. Diagonal partners reserve and swing together while the opposite pair supports the body.</p></div><div class="actor-controls"><button class="primary" id="actorStart">Run with actors</button><button class="ghost" id="actorResume">Resume saved</button><button id="actorRestart" disabled>Restart actors</button><button class="ghost" id="actorRecover" hidden>Recover connection</button></div></div>
+<div class="goal-controls">
+<div><label for="actorPolicy">Leg decisions</label><select id="actorPolicy"><option value="trot" selected>Diagonal pairs</option><option value="reactive">Reactive single leg</option><option value="fixed">Fixed crawl order</option></select></div>
+<div><label for="actorProfile">Motion timing</label><select id="actorProfile"><option value="brisk" selected>Brisk</option><option value="baseline">Baseline</option></select></div>
+<div><label for="goalVx">Forward <output id="goalVxValue">5.0 cm/s</output></label><input id="goalVx" type="range" min="-8" max="8" step="0.2" value="5"></div>
+<div><label for="goalVy">Sideways, left + <output id="goalVyValue">0.0 cm/s</output></label><input id="goalVy" type="range" min="-4" max="4" step="0.2" value="0"></div>
+<div><label for="goalYaw">Turn, left + <output id="goalYawValue">0.0 °/s</output></label><input id="goalYaw" type="range" min="-11" max="11" step="0.5" value="0"></div>
+</div>
+<div class="goal-presets"><button data-goal="1.2,0,0" data-pair="5,0,0">Forward</button><button data-goal="-1.2,0,0" data-pair="-5,0,0">Reverse</button><button data-goal="0,0.8,0" data-pair="0,2.5,0">Side left</button><button data-goal="0,-0.8,0" data-pair="0,-2.5,0">Side right</button><button data-goal="0,0,2" data-pair="0,0,6">Turn left</button><button data-goal="0,0,-2" data-pair="0,0,-6">Turn right</button><button data-goal="0,0,0">Hold</button><button id="applyGoal" class="primary">Apply goal</button></div>
+<p class="crawl-help" id="goalStatus">Choose a goal, then Run with actors. Presets update the next reservation; active feet finish landing together.</p>
+<div class="actor-stats"><span id="actorEpisode">No actor episode</span><span id="actorRevision">—</span><span id="actorClock">100 ms durable windows</span><span id="actorLatency">Local policies · no model calls</span></div>
+<p id="pairStatus" class="crawl-help" role="status"></p><div class="ranger-row" id="rangerIntents"></div><div id="actorRecovery" role="status"></div><div id="actorError" role="alert"></div>
+<details id="actorDetails"><summary class="small" style="cursor:pointer;margin-top:15px">Coordination timeline · simulation time</summary><div id="actorTimeline"></div></details>
+<p class="crawl-help">Restart actors pauses the simulation, restarts the local runtime, and verifies the same checkpoint and Ranger memories. Press Run simulation to continue.</p>
+</section>
+<div class="workspace"><section class="panel"><div class="stage-head"><span id="modeName">Calibration rig</span><span class="small" id="playState">Paused</span></div><img id="frame" src="/frame.jpg" alt="Live MuJoCo Go1 with four colored legs"><div class="toolbar"><button class="primary" id="play">Run simulation</button><button id="step">Advance 100 ms</button><span class="spacer"></span><button class="ghost" id="reset">Reset</button></div><div class="metrics"><div class="metric"><span class="small">SIMULATION TIME</span><strong id="simTime">0.00 s</strong></div><div class="metric"><span class="small">CONTROL TICK</span><strong id="tick">0</strong></div><div class="metric"><span class="small">BODY HEIGHT</span><strong id="height">—</strong></div></div></section>
+<aside class="panel control"><div class="section-title">Command a leg</div><div class="legs-picker" id="legPicker"></div><label for="primitive">Motion</label><select id="primitive"><option value="swing_to">Swing forward / backward</option><option value="support">Maintain support</option><option value="push">Push backward</option></select><label for="duration">Planned duration <output id="durationValue">600 ms</output></label><input id="duration" type="range" min="200" max="1400" step="20" value="600"><label for="forward">Forward displacement <output id="forwardValue">4 cm</output></label><input id="forward" type="range" min="-6" max="6" step="1" value="4"><label for="clearance">Foot clearance <output id="clearanceValue">4 cm</output></label><input id="clearance" type="range" min="2" max="7" step="1" value="4"><button class="primary full" id="arm">Arm front-left motion</button><p class="note">Arm a leg, then run or advance one 100 ms window. Other legs keep executing their active motions.</p><div id="message" role="status"></div><div class="divider"></div><label class="mode"><input type="checkbox" id="rig" checked>Calibration rig · support the trunk</label><p class="rig-note" id="rigNote">The visible fixture supports the body while you calibrate individual leg motions.</p><div class="toolbar" style="padding:16px 0 0"><button class="ghost" id="save">Save state</button><button class="ghost" id="restore" disabled>Restore</button></div><p class="note" id="checkpointNote" style="margin-top:9px">Checkpoint includes in-flight motions. Stored in this local process until it exits.</p></aside></div>
+<section class="states" id="legStates" aria-label="Leg execution state"></section>
+<section class="panel log"><div class="log-head"><div class="section-title" style="margin:0">Motion events</div><span class="small">Actual completion, measured in simulation time</span></div><div class="log-list" id="events"><p class="note">No completed motions yet.</p></div></section>
+<footer><span id="engine">MuJoCo Playground model · Native physics</span><span>20 ms control · 4 ms physics · No model calls</span></footer>
+</main>
+<script>
+const names={FR:'Front right',FL:'Front left',RR:'Rear right',RL:'Rear left'};
+const colors={FR:'#fc6c85',FL:'#63b3ff',RR:'#f8cc69',RL:'#65d6b0'};
+let selected='FL', state=null, commandBusy=false;
+const $=id=>document.getElementById(id);
+$('legPicker').innerHTML=Object.keys(names).map(leg=>`<button class="legpick ${leg===selected?'selected':''}" data-leg="${leg}" style="--leg-color:${colors[leg]}">${names[leg]}<span>${leg}</span></button>`).join('');
+$('legStates').innerHTML=Object.keys(names).map(leg=>`<article class="panel leg-state" id="card-${leg}" style="--leg-color:${colors[leg]}"><div class="leg-title">${names[leg]}<span class="contact">CONTACT</span></div><div class="phase">Holding</div><div class="small detail">Ready</div><div class="progress"><div style="width:0"></div></div><div class="foot">—</div></article>`).join('');
+function updateSelection(){document.querySelectorAll('.legpick').forEach(b=>b.classList.toggle('selected',b.dataset.leg===selected));$('arm').textContent=`Arm ${names[selected].toLowerCase()} motion`;$('arm').disabled=commandBusy||Boolean(state?.legs[selected].active)||Boolean(state?.fallen)}
+document.querySelectorAll('.legpick').forEach(button=>button.onclick=()=>{selected=button.dataset.leg;updateSelection()});
+for(const [id,unit] of [['duration',' ms'],['forward',' cm'],['clearance',' cm']]) $(id).oninput=()=>$(id+'Value').textContent=$(id).value+unit;
+async function command(payload){commandBusy=true;updateSelection();try{const response=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw new Error(result.error);$('message').textContent='';await poll();return true}catch(e){$('message').textContent=e.message;return false}finally{commandBusy=false;updateSelection()}}
+$('arm').onclick=async()=>{if(await command({command:'motion',leg:selected,primitive:$('primitive').value,duration:Number($('duration').value)/1000,forward:Number($('forward').value)/100,clearance:Number($('clearance').value)/100}))$('message').textContent='Motion armed. Run or advance the simulation.'};
+$('play').onclick=()=>command({command:'run',running:!state?.running});$('step').onclick=()=>command({command:'step'});$('reset').onclick=()=>command({command:'reset'});$('rig').onchange=()=>command({command:'reset',rig:$('rig').checked});$('save').onclick=async()=>{if(await command({command:'save'}))$('message').textContent='Checkpoint saved, including active motion progress.'};$('restore').onclick=()=>command({command:'restore'});
+async function poll(){try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Connection lost');state=await response.json();$('simTime').textContent=state.sim_time.toFixed(2)+' s';$('tick').textContent=state.tick;$('height').textContent=(state.body_height*100).toFixed(1)+' cm';$('playState').textContent=state.fallen?'Body fell · reset to continue':state.running?'Running':'Paused';$('play').textContent=state.running?'Pause':'Run simulation';$('play').disabled=state.fallen;$('step').disabled=state.fallen;$('restore').disabled=!state.checkpoint_available;$('save').disabled=state.backend!=='native';$('modeName').textContent=state.rig?'Calibration rig':'Free body';$('rig').checked=state.rig;$('rigNote').textContent=state.rig?'The visible fixture supports the body while you calibrate individual leg motions.':'Unassisted physics. A single swing can tip the body; coordinated balance is the next experiment.';$('engine').textContent='MuJoCo Playground Go1 · '+(state.backend==='native'?'Native MuJoCo':'MJX-JAX');for(const [leg,data] of Object.entries(state.legs)){const card=$('card-'+leg),active=data.active,last=data.last;card.querySelector('.contact').textContent=data.contact?'CONTACT':'AIRBORNE';card.querySelector('.contact').className='contact '+(data.contact?'':'air');card.querySelector('.phase').textContent=active?active.phase:last?last.status:'Holding';card.querySelector('.detail').textContent=active?`${Math.round(data.remaining_s*1000)} ms planned · deadline ${((active.deadline_tick-state.tick)*20).toFixed(0)} ms`:last?last.reason:'Ready for a motion';card.querySelector('.progress div').style.width=(active?data.progress*100:0)+'%';card.querySelector('.foot').textContent=`Foot height ${(data.foot[2]*100).toFixed(1)} cm`}$('events').replaceChildren();if(!state.history.length)$('events').textContent='No completed motions yet.';for(const event of [...state.history].reverse()){const row=document.createElement('div');row.className='event';const time=document.createElement('time');time.textContent=(event.end_tick*.02).toFixed(2)+' s';const text=document.createElement('span');text.textContent=`${event.leg} · ${event.primitive} · ${event.reason}`;const result=document.createElement('span');result.className='result '+(event.status==='failed'?'failed':'');result.textContent=`${Math.round((event.end_tick-event.start_tick)*20)} ms actual`;row.append(time,text,result);$('events').append(row)}updateSelection()}catch(e){$('playState').textContent='Disconnected';}}
+async function polling(){await poll();setTimeout(polling,120)}polling();
+const frame=$('frame');frame.onload=()=>setTimeout(()=>frame.src='/frame.jpg?t='+Date.now(),80);frame.onerror=()=>setTimeout(()=>frame.src='/frame.jpg?t='+Date.now(),1000);
+</script>
+<script>
+// Keep crawl telemetry separate from the manual motion controls.
+const manualPoll = poll;
+poll = async function () {
+  await manualPoll();
+  if (!state) return;
+  const crawl = state.crawl;
+  const active = crawl?.status === 'running';
+  $('crawlStart').disabled = active || commandBusy;
+  $('crawlStop').disabled = !active || crawl.stop_requested;
+  $('cycles').disabled = active;
+  $('bodyTilt').textContent = state.body_tilt_deg.toFixed(1) + '°';
+  const diagonalSupport = crawl?.policy === 'trot' && Object.values(state.legs).filter(l=>l.contact).length === 2;
+  $('supportMargin').textContent = diagonalSupport ? 'Diagonal stance' : state.support_margin > -0.9 ? (state.support_margin * 100).toFixed(1) + ' cm' : 'Insufficient feet';
+  $('supportMargin').classList.toggle('crawl-error', !diagonalSupport && state.support_margin < 0);
+  $('crawlSteps').textContent = crawl ? `${crawl.completed_steps} / ${crawl.cycles * 4}` : '—';
+  $('crawlDistance').textContent = crawl ? (crawl.forward_m * 100).toFixed(1) + ' cm' : '—';
+  $('crawlProgress').style.width = crawl ? crawl.progress * 100 + '%' : '0%';
+  $('crawlPhase').textContent = crawl ? (active ? `${crawl.phase.replaceAll('_', ' ')}${crawl.selected_legs?.length ? ' · ' + crawl.selected_legs.join(' + ') : crawl.leg ? ' · ' + crawl.leg : ''}` : crawl.status) : 'Ready';
+  $('crawlHelp').textContent = crawl?.reason || (crawl?.stop_requested && active
+    ? 'Finishing all reserved foot placements, then recentering onto four feet.'
+    : 'Run crawl resets the episode with the rig disabled. Orange marker: projected center of mass. Green outline: contacting feet.');
+  if (crawl) {
+    $('modeName').textContent = state.actors ? 'Durable Rangers · ' + state.actors.policy + ' policy' : 'Scripted crawl · unassisted physics';
+    $('rigNote').textContent = 'The crawl uses joint-actuator stance control and measured touchdown events. Reset returns to manual leg control.';
+    $('arm').disabled = true;
+    $('rig').disabled = active;
+    if (crawl.status === 'failed') {
+      $('play').disabled = true;
+      $('step').disabled = true;
+      $('playState').textContent = 'Crawl failed · reset to continue';
+    }
+    for (const [leg, data] of Object.entries(state.legs)) {
+      if (!data.active) {
+        $('card-' + leg).querySelector('.phase').textContent = 'Stance';
+        $('card-' + leg).querySelector('.detail').textContent = data.contact ? 'Supporting body' : 'Contact lost';
+      }
+    }
+  } else {
+    $('rig').disabled = false;
+  }
+};
+const manualSelection = updateSelection;
+updateSelection = function () {
+  manualSelection();
+  if (state?.crawl) $('arm').disabled = true;
+};
+$('crawlStart').onclick = () => command({command:'crawl', cycles:Number($('cycles').value)});
+$('crawlStop').onclick = () => command({command:'stop_crawl'});
+</script>
+<script>
+$('rangerIntents').innerHTML=Object.keys(names).map(leg=>`<div class="ranger-intent" style="--leg-color:${colors[leg]}"><strong>${leg} Ranger</strong><span id="intent-${leg}">Waiting for an episode</span></div>`).join('');
+const crawlPoll=poll;
+poll=async function(){
+  await crawlPoll(); if(!state)return;
+  const a=state.actors, active=state.crawl?.status==='running';
+  $('actorStart').disabled=commandBusy||active||state.backend!=='native';
+  $('actorResume').disabled=commandBusy||active||state.backend!=='native';
+  $('actorRestart').disabled=commandBusy||!a||Boolean(a?.error);
+  $('actorRecover').hidden=!a?.error;
+  $('actorRecover').disabled=commandBusy;
+  $('actorEpisode').textContent=a?'Body '+a.episode.slice(0,8):'No actor episode';
+  $('actorRevision').textContent=a?'Revision '+a.revision:'—';
+  $('actorClock').textContent=a?`Saved ${(a.committed_tick*.02).toFixed(2)} s · live ${state.sim_time.toFixed(2)} s`:'100 ms durable windows';
+  $('actorLatency').textContent=a?(a.decision_wall_ms ? `Last decision round ${Math.round(a.decision_wall_ms)} ms wall time` : 'Local policies · no model calls'):'Local policies · no model calls';
+  for(const leg of Object.keys(names)){
+    const intent=a?.intents.find(i=>i.leg===leg);
+    $('intent-'+leg).textContent=intent?`${intent.kind==='step'?'Requested step':'Wait'} · ${intent.reason || 'fixed policy'}`:'Waiting for an episode';
+  }
+  $('actorPolicy').disabled=active;
+  $('actorProfile').disabled=active;
+  $('applyGoal').disabled=commandBusy||!active||!a||a.policy==='fixed'||Boolean(a.error);
+  const goal=a?.goal;
+  configureGoalRanges(active && a ? a.policy : $('actorPolicy').value);
+  const swinging=Object.entries(state.legs).filter(([leg,data])=>data.active).map(([leg])=>leg);
+  $('pairStatus').textContent=a?.policy==='trot' ? `${swinging.length ? 'Swinging together: '+swinging.join(' + ') : 'All feet supporting / aligning next pair'} · ${state.crawl.concurrent_air_s.toFixed(2)} s with both partners airborne · peak ${state.crawl.max_concurrent_swings} simultaneous motions` : '';
+  const canChooseGoal=active ? a?.policy!=='fixed' : $('actorPolicy').value!=='fixed';
+  for(const id of ['goalVx','goalVy','goalYaw'])$(id).disabled=!canChooseGoal;
+  document.querySelectorAll('[data-goal]').forEach(b=>b.disabled=!canChooseGoal||commandBusy);
+  $('goalStatus').textContent=a?.policy==='fixed' ? `Fixed 5 cm forward steps · ${a.profile} timing · velocity goals are ignored in fixed mode.` : a ? `${a.policy} · ${a.profile} · active goal: forward ${(goal.vx*100).toFixed(1)} cm/s, left ${(goal.vy*100).toFixed(1)} cm/s, turn ${(goal.yaw_rate*180/Math.PI).toFixed(1)} °/s · actual yaw ${state.crawl.yaw_deg.toFixed(1)}° · lateral travel ${(state.crawl.lateral_m*100).toFixed(1)} cm` : 'Choose a goal, then Run with actors. Presets update the next reservation; active feet finish landing together.';
+  $('actorError').textContent=a?.error||'';
+  const recovery=a?.last_recovery;
+  $('actorRecovery').textContent=recovery?`Recovered at ${(recovery.tick*.02).toFixed(2)} s · checkpoint identical · all five actors reactivated · decisions preserved`:(a?.recoveries?'Resumed from the durable Body checkpoint.':'');
+  $('actorTimeline').replaceChildren();
+  for(const event of [...(a?.timeline||[])].reverse()){
+    const row=document.createElement('div'); row.className='actor-event';
+    for(const [tag,value] of [['time',(event.tick*.02).toFixed(2)+' s'],['b',event.leg||'Body'],['b',event.kind.replaceAll('_',' ')],['span',event.detail]]){
+      const cell=document.createElement(tag); cell.textContent=value; row.append(cell);
+    }
+    $('actorTimeline').append(row);
+  }
+  $('checkpointNote').textContent=a?'The Body actor saves every 100 ms. Resume saved restores this episode after the server exits.':'Checkpoint includes in-flight motions. Stored in this local process until it exits.';
+  if(a){
+    $('save').disabled=true; $('restore').disabled=true;
+    if(a.error || !active){$('play').disabled=true;$('step').disabled=true;}
+    if(a.error)$('playState').textContent='Actor connection paused · recover to continue';
+  }
+};
+function goalValues(){return {vx:Number($('goalVx').value)/100,vy:Number($('goalVy').value)/100,yaw_rate:Number($('goalYaw').value)*Math.PI/180};}
+function goalLabels(){for(const id of ['goalVx','goalVy','goalYaw'])$(id+'Value').textContent=Number($(id).value).toFixed(1)+(id==='goalYaw'?' °/s':' cm/s');}
+for(const id of ['goalVx','goalVy','goalYaw'])$(id).oninput=goalLabels;
+function configureGoalRanges(policy){
+  const bounds=policy==='trot'?[8,4,11]:[2.4,1.4,4];
+  ['goalVx','goalVy','goalYaw'].forEach((id,i)=>{const el=$(id);if(Number(el.max)!==bounds[i]){el.min=-bounds[i];el.max=bounds[i];}});
+  goalLabels();
+}
+$('actorPolicy').onchange=()=>{
+  configureGoalRanges($('actorPolicy').value);
+  $('goalVx').value=$('actorPolicy').value==='trot'?5:1.2;
+  $('goalVy').value=0;$('goalYaw').value=0;goalLabels();poll();
+};
+$('applyGoal').onclick=()=>command({command:'actor_goal',goal:goalValues()});
+document.querySelectorAll('[data-goal]').forEach(button=>button.onclick=()=>{
+  const policy=state?.crawl?.status==='running' && state?.actors ? state.actors.policy : $('actorPolicy').value;
+  const values=(policy==='trot' && button.dataset.pair ? button.dataset.pair : button.dataset.goal).split(',');
+  ['goalVx','goalVy','goalYaw'].forEach((id,i)=>$(id).value=values[i]);goalLabels();
+  if(state?.actors && state.actors.policy!=='fixed' && state.crawl.status==='running' && !commandBusy)command({command:'actor_goal',goal:goalValues()});
+});
+$('actorStart').onclick=async()=>{if(await command({command:'actor_crawl',cycles:Number($('cycles').value),policy:$('actorPolicy').value,profile:$('actorProfile').value,goal:goalValues()}))$('actorDetails').open=true;};
+$('actorResume').onclick=()=>command({command:'actor_resume'});
+$('actorRestart').onclick=()=>command({command:'actor_restart'});
+$('actorRecover').onclick=()=>command({command:'actor_recover'});
+</script></body></html>

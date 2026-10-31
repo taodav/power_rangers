@@ -1,0 +1,26 @@
+[project]
+name = "power-rangers"
+version = "0.1.0"
+description = "Timed leg-motion experiments on MuJoCo Playground's Go1"
+requires-python = ">=3.12,<3.14"
+dependencies = ["playground==0.2.0", "pillow>=12,<14", "scipy>=1.11,<2"]
+
+[dependency-groups]
+dev = ["pytest>=9,<10"]
+
+[project.scripts]
+rangers = "power_rangers.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/power_rangers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.uv]
+cache-dir = ".cache/uv"
