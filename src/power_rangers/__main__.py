@@ -38,12 +38,73 @@ def main():
     evaluate.add_argument("--cycles", type=int, default=6)
     evaluate.add_argument("--suite", choices=["reactive", "paired", "speed"], default="reactive")
     evaluate.add_argument("--output", type=Path)
+    search = sub.add_parser("gait-search", help="Run a bounded OpenAI/MuJoCo gait search with a local Terse journal")
+    search.add_argument("--rounds", type=int, default=6)
+    search.add_argument("--model", default="gpt-6-astra")
+    search.add_argument("--run-id", default="gallop-v1")
+    search.add_argument("--output", type=Path, default=Path("artifacts/gait-search"))
+    replay = sub.add_parser("gait-replay", help="Evaluate an experimental periodic policy without API calls")
+    replay.add_argument("policy", type=Path)
+    replay.add_argument("--seconds", type=float, default=10.)
+    replay.add_argument("--seed", type=int, default=101)
+    replay.add_argument("--gif", type=Path)
+    replay.add_argument("--output", type=Path, default=Path("artifacts/gait-replay.json"))
+    team = sub.add_parser("team", help="Four model-backed durable Rangers negotiate independent leg policies")
+    team.add_argument("--seconds", type=float, default=10.)
+    team.add_argument("--restart-at", type=int)
+    team.add_argument("--output", type=Path, default=Path("artifacts/team-demo.json"))
+    team.add_argument("--data-dir", type=Path, default=Path("artifacts/team-run-state"))
     args = parser.parse_args()
     if args.command == "setup":
         print(download_assets())
     elif args.command == "serve":
         from .server import serve as run_server
         run_server(args.port, args.backend, not args.free_body)
+    elif args.command == "gait-search":
+        from .gait_search import run_search
+        run_search(args.output, args.run_id, args.model, args.rounds)
+    elif args.command == "team":
+        import time
+        from .actors import TerseRuntime
+        from .team import TeamSession
+        from .team_robot import TeamRobot
+        runtime = TerseRuntime(port=0, data_dir=args.data_dir)
+        session = None
+        try:
+            runtime.start()
+            robot = TeamRobot()
+            session = TeamSession.create(robot, runtime, seconds=args.seconds)
+            last_stage, restarted = None, False
+            while robot.team['status'] in ('ready', 'running'):
+                session.step()
+                stage = session.telemetry()['planning']['stage']
+                if stage != last_stage:
+                    print(stage, flush=True)
+                    last_stage = stage
+                if args.restart_at is not None and not restarted and robot.tick >= args.restart_at:
+                    print(json.dumps(session.restart()), flush=True)
+                    restarted = True
+                if not robot.controller:
+                    time.sleep(.02)
+            report = {'robot': robot.state(), 'actors': session.telemetry()}
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(report, indent=2) + '\n')
+            print(json.dumps({'status': robot.team['status'], 'distance_m': robot.state()['team']['distance_m'],
+                'max_tilt_deg': robot.team['max_tilt'], 'max_concurrent': robot.team['max_concurrent'],
+                'rounds': len(session.record['rounds']), 'episode': session.episode}), flush=True)
+            if robot.team['status'] != 'completed':
+                raise SystemExit('Team demo failed; inspect the report')
+        finally:
+            if session:
+                session.close()
+            runtime.stop()
+    elif args.command == "gait-replay":
+        from .gallop import Gait, compact, evaluate as evaluate_gait
+        result = evaluate_gait(Gait(**json.loads(args.policy.read_text())), args.seconds, args.seed,
+                               trace_path=args.output.with_suffix('.npz'), gif_path=args.gif)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2) + '\n')
+        print(json.dumps(compact(result), indent=2))
     elif args.command == "evaluate":
         from .evaluation import evaluate
         evaluate(args.output or Path(f"artifacts/{args.suite}-evaluation.json"), args.seeds, args.cycles, args.suite)
