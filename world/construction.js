@@ -1,11 +1,26 @@
 import * as THREE from 'three';
 import {BEAM, BOX, PALLET_STOCK, SITE, SLAB_TOP, STATIONS, buildSlots} from './site-plan.js';
+import {worldPoint} from './builder-view.js';
 
 /**
  * Draws the job site from the server's state, and overlays arm poses and grippers on the Rangers.
  * The overlay is display-only: it is not actuation, and the physical rig takes no part in it.
  */
 const clamp01 = v => Math.max(0, Math.min(1, v));
+
+/** A label that always draws on top. Only ever placed at a measured position; it never moves anything. */
+function makeMarker(scene, text, color, labelAbove = false) {
+  const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+  const c = canvas.getContext('2d');
+  c.strokeStyle = color; c.lineWidth = 7; c.shadowColor = '#000a'; c.shadowBlur = 6;
+  const ringY = labelAbove ? 160 : 96;
+  c.beginPath(); c.arc(128, ringY, 54, 0, Math.PI * 2); c.stroke();
+  c.fillStyle = color; c.font = '700 34px sans-serif'; c.textAlign = 'center'; c.fillText(text, 128, labelAbove ? 78 : 205);
+  const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map, depthTest: false, transparent: true, toneMapped: false}));
+  sprite.scale.setScalar(1.15); sprite.center.set(.5, labelAbove ? .375 : .625); sprite.renderOrder = 6; sprite.visible = false; scene.add(sprite);
+  return sprite;
+}
 const ease = t => t * t * (3 - 2 * t);
 const METAL = new THREE.MeshStandardMaterial({color: '#39484a', metalness: .6, roughness: .38});
 const JOINT = new THREE.MeshStandardMaterial({color: '#7f9085', metalness: .55, roughness: .4});
@@ -104,6 +119,7 @@ export function createConstruction(scene) {
     const m = new THREE.Mesh(geometry, crateMaterial.clone()); m.castShadow = true; m.visible = false; scene.add(m); return m;
   });
 
+  const boxMarker = makeMarker(scene, 'BOX', '#ffd166'), targetMarker = makeMarker(scene, 'TARGET', '#8fd6a4', true);
   const rigs = []; const tints = [];
   const dummy = new THREE.Object3D(), color = new THREE.Color(), white = new THREE.Color('#fff');
   const hold = new THREE.Vector3();
@@ -135,6 +151,10 @@ export function createConstruction(scene) {
   function update(state, models, form) {
     const site = state?.site;
     if (!site) return;
+    const bench = state.builder?.physics, cargo = bench?.objects?.[0], target = bench?.placement?.target;
+    boxMarker.visible = !!cargo; targetMarker.visible = !!target && !cargo?.placed;
+    if (cargo) {const {x, y, z} = worldPoint(cargo.position); boxMarker.position.set(x, y, z);}
+    if (target) {const {x, y, z} = worldPoint(target); targetMarker.position.set(x, y, z);}
     attach(models, state.rangers);
     // The timed preview stays out of a physical run, so nothing here can be mistaken for measured work.
     const previewShown = !state.builder;

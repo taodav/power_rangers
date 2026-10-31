@@ -2,7 +2,7 @@
  * What the page says about a physical delivery, derived only from the server's measured state.
  * No three.js here, so these rules can be tested directly.
  */
-const RIG_SCALE = 2.4;
+const RIG_SCALE = 2.4, RIG_FLOOR = .15;
 
 const JOBS = {
   approach: 'Walking to the box', center: 'Lining up with the box', raise: 'Raising its arm', reach: 'Reaching for the box',
@@ -11,7 +11,12 @@ const JOBS = {
   place_lower: 'Setting the box down', release: 'Opening its fingers', withdraw: 'Backing away', complete: 'Finished moving',
 };
 
-/** The physical body's place in the world: the same axes and scale the rig is drawn with. */
+/** A physics position in world coordinates: the same axes, scale and floor height the rig is drawn with. */
+export function worldPoint([x, y, z]) {
+  return {x: y * RIG_SCALE, y: z * RIG_SCALE + RIG_FLOOR, z: x * RIG_SCALE};
+}
+
+/** The physical body's place in the world. */
 export function builderPose(physics) {
   const [mx, my, , w, x, y, z] = physics.body;
   return {x: my * RIG_SCALE, z: mx * RIG_SCALE, yaw: Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))};
