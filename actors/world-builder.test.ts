@@ -1,5 +1,5 @@
 import {test,expect} from 'bun:test';
-import {PhysicalBuilder,type NativeWorker} from './world-builder';
+import {PLAYBACK,PhysicalBuilder,type NativeWorker} from './world-builder';
 import {authorize,confirm,cancel,type DeliveryRecord} from './src/delivery-policy';
 
 // Synthetic adapter controls. Native motion and real actor persistence have separate integration checks.
@@ -45,6 +45,12 @@ test('durable intent precedes motion; complete requires the saved measured recei
   expect(f.trace.filter(m=>m==='confirmDelivery')).toHaveLength(1);
   await f.builder.tick();expect(f.trace.filter(m=>m==='confirmDelivery')).toHaveLength(1);
   await expect(f.builder.start()).rejects.toThrow('cannot be replayed');
+});
+
+test('faster playback runs more physics per call and reports its speed',async()=>{
+  const f=fixture();await f.builder.start();const before=f.builder.physics.tick;
+  expect(f.builder.snapshot().playback).toBe(PLAYBACK);expect(PLAYBACK).toBe(3);
+  await f.builder.tick();expect(f.builder.physics.tick-before).toBe(5*PLAYBACK);
 });
 
 test('pause freezes ticks; resume continues the same job',async()=>{

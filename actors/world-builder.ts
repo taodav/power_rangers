@@ -1,6 +1,9 @@
 import {refuseReceipt, type DeliveryRecord, type PlacedReceipt} from './src/delivery-policy';
 
 export const DELIVERY_TARGET=[.93,.83,.99] as const;
+/** How much faster than real time a run plays. The physics, timestep and checks are the same at any value. */
+export const PLAYBACK=3;
+const TICKS_PER_REAL_TIME_CALL=5;
 export type NativeWorker={call(command:Record<string,unknown>):Promise<any>;stop():Promise<void>};
 type Rpc=(actorId:string,method:string,args:unknown[])=>Promise<any>;
 type Status='starting'|'running'|'paused'|'confirming'|'complete'|'error';
@@ -19,7 +22,7 @@ export class PhysicalBuilder {
   constructor(readonly actorId:string,private createWorker:()=>NativeWorker,private rpc:Rpc,
     private event:(text:string)=>void){}
 
-  snapshot(){return {status:this.status,jobId:this.jobId,actorId:this.actorId,slot:this.slot,
+  snapshot(){return {status:this.status,playback:PLAYBACK,jobId:this.jobId,actorId:this.actorId,slot:this.slot,
     physics:this.physics,actorRecord:this.actorRecord,error:this.error};}
 
   private async fail(){
@@ -63,7 +66,7 @@ export class PhysicalBuilder {
 
   private async advance(){
     const previous=this.physics;
-    const state=await this.worker!.call({command:'step',ticks:5});
+    const state=await this.worker!.call({command:'step',ticks:TICKS_PER_REAL_TIME_CALL*PLAYBACK});
     this.physics=state;
     if(state.failed||state.job_id!==this.jobId||!Number.isFinite(state.time)||state.time<=previous.time)
       throw new Error('Native delivery failed or returned stale state');
