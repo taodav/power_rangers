@@ -3,7 +3,7 @@ import {authorize,cancel,confirm,type DeliveryRecord} from './src/delivery-polic
 
 const request=(over:object={})=>JSON.stringify({sequence:1,jobId:'job-1',objectId:'cargo-0',destinationId:'station-1',ownerSlot:0,nativeReady:true,...over});
 /** Shaped like the placed receipt in physics/ranger.py, with the fields the live adapter adds. */
-const receipt=(over:object={})=>JSON.stringify({event:'placed',job_id:'job-1',object_id:'cargo-0',owner_slot:0,destination_id:'station-1',tick:7421,time:14.842,evidence:'measured',settled_samples:50,position:[.6,0,.82],target:[.6,.0013,.82],support_force:1.1772,linear_speed:.0004,tilt_deg:.3,fingers_open:true,robot_contact:false,positioned:true,valid:true,...over});
+const receipt=(over:object={})=>JSON.stringify({event:'placed',job_id:'job-1',object_id:'cargo-0',owner_slot:0,destination_id:'station-1',tick:7421,time:14.842,evidence:'measured',settled_samples:50,position:[.93,.8287,.99],target:[.93,.83,.99],support_force:1.1772,linear_speed:.0004,tilt_deg:.3,fingers_open:true,robot_contact:false,positioned:true,valid:true,...over});
 const active=()=>authorize(null,0,request());
 const placed=()=>confirm(active(),'job-1',receipt());
 
@@ -32,6 +32,9 @@ describe('authorizeDelivery',()=>{
     const later=authorize(cancel(next,'job-2'),0,request({sequence:3,jobId:'job-3'}));
     expect(()=>authorize(cancel(later,'job-3'),0,request({sequence:4}))).toThrow();
   });
+  test('only known destinations can be authorized',()=>{
+    for(const destinationId of ['station-2','constructor','toString'])expect(()=>authorize(null,0,request({destinationId}))).toThrow();
+  });
   test('malformed requests are refused',()=>{
     for(const bad of [{sequence:0},{sequence:1.5},{jobId:''},{jobId:'a b'},{objectId:''},{destinationId:7}])expect(()=>authorize(null,0,request(bad))).toThrow();
     expect(()=>authorize(null,0,'null')).toThrow();
@@ -55,13 +58,17 @@ describe('confirmDelivery',()=>{
     for(const bad of [{job_id:'other'},{job_id:null},{object_id:'cargo-1'},{owner_slot:1},{destination_id:'station-2'}])expect(()=>confirm(active(),'job-1',receipt(bad))).toThrow();
   });
   test('every measured limit is enforced',()=>{
-    for(const bad of [{settled_samples:49},{settled_samples:undefined},{support_force:.5},{support_force:NaN},{linear_speed:.02},{tilt_deg:8},{tilt_deg:-8},
+    for(const bad of [{settled_samples:49},{settled_samples:undefined},{support_force:.5},{support_force:NaN},{linear_speed:.02},{tilt_deg:8},{tilt_deg:-1},{linear_speed:-.001},
       {fingers_open:false},{fingers_open:'yes'},{robot_contact:true},{robot_contact:undefined},{positioned:false},{valid:false},{valid:undefined},
-      {position:[.6,.03,.82]},{position:[.6,0,.84]},{position:[.6,0]},{target:null},{tick:-1},{tick:1.5},{time:-1},{time:null}])
+      {position:[.93,.86,.99]},{position:[.93,.83,1.01]},{position:[.93,.83]},{target:null},{tick:-1},{tick:1.5},{time:-1},{time:null}])
       expect(()=>confirm(active(),'job-1',receipt(bad))).toThrow();
   });
   test('the actor checks position itself, even if the native side says valid',()=>{
     expect(()=>confirm(active(),'job-1',receipt({position:[.7,0,.82],valid:true,positioned:true}))).toThrow();
+  });
+  test('a receipt cannot vouch for its own coordinates',()=>{
+    expect(()=>confirm(active(),'job-1',receipt({position:[0,0,0],target:[0,0,0]}))).toThrow();
+    expect(()=>confirm(active(),'job-1',receipt({target:[.93,.83,.98]}))).toThrow();
   });
   test('a refused receipt leaves the job active, so a good one can still land',()=>{
     const first=active();try{confirm(first,'job-1',receipt({valid:false}));}catch{}

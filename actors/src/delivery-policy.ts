@@ -15,6 +15,8 @@ export type DeliveryRecord = {sequence:number; jobId:string; objectId:string; de
 
 /** The limits a placement must meet, matching the checks in physics/ranger.py. Metres, newtons, degrees. */
 export const PLACEMENT = {settledSamples:50, minSupport:.5, maxSpeed:.02, maxTilt:8, horizontal:.025, vertical:.015};
+/** Known destinations, fixed here so a receipt can't vouch for its own coordinates. Physics frame, metres. */
+export const STATIONS:Record<string,number[]> = {"station-1":[.93, .83, .99]};
 const PAST_JOBS = 64;
 const isName = (v:unknown):v is string => typeof v === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(v);
 const finite = (...values:unknown[]) => values.every(Number.isFinite);
@@ -28,6 +30,7 @@ export function authorize(record:DeliveryRecord|null, slot:number, input:string)
   const r = JSON.parse(input) as DeliveryRequest;
   if (!r || !Number.isSafeInteger(r.sequence) || r.sequence < 1 || !isName(r.jobId) || !isName(r.objectId) || !isName(r.destinationId))
     throw new Error("Invalid delivery request");
+  if (!Object.hasOwn(STATIONS, r.destinationId)) throw new Error("Unknown destination");
   if (r.ownerSlot !== slot) throw new Error("A Ranger can only authorize work on its own hardware");
   if (r.nativeReady !== true) throw new Error("The native worker is not ready");
   if (record && r.sequence === record.sequence) {
@@ -50,13 +53,16 @@ export function refuseReceipt(record:DeliveryRecord, jobId:string, t:PlacedRecei
   if (!Number.isSafeInteger(t.settled_samples) || t.settled_samples < PLACEMENT.settledSamples) return "The object has not settled for long enough";
   if (!finite(t.support_force, t.linear_speed, t.tilt_deg)) return "The receipt has malformed measurements";
   if (t.support_force <= PLACEMENT.minSupport) return "The destination is not supporting the object";
+  if (t.linear_speed < 0 || t.tilt_deg < 0) return "The receipt has malformed measurements";
   if (t.linear_speed >= PLACEMENT.maxSpeed) return "The object is still moving";
-  if (Math.abs(t.tilt_deg) >= PLACEMENT.maxTilt) return "The object is tilted";
+  if (t.tilt_deg >= PLACEMENT.maxTilt) return "The object is tilted";
   if (t.fingers_open !== true) return "The fingers are not open";
   if (t.robot_contact !== false) return "The robot is still touching the object";
   if (t.positioned !== true || t.valid !== true) return "The native checks did not pass";
   if (!isPosition(t.position) || !isPosition(t.target)) return "The receipt has malformed positions";
-  const [x, y, z] = t.position, [a, b, c] = t.target;
+  const station = STATIONS[record.destinationId];
+  if (t.target.some((value, axis) => value !== station[axis])) return "The receipt's target is not this station";
+  const [x, y, z] = t.position, [a, b, c] = station;
   if (Math.hypot(x - a, y - b) >= PLACEMENT.horizontal || Math.abs(z - c) >= PLACEMENT.vertical) return "The object is not on the target";
   return null;
 }
