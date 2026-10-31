@@ -1,84 +1,88 @@
 import {describe,test,expect,mock} from 'bun:test';
-import {EMPTY_DELIVERY,authorize,failDelivery,recordPlacement,type DeliveryRecord} from './src/delivery-policy';
+import {authorize,cancel,confirm,type DeliveryRecord} from './src/delivery-policy';
 
-const job=(over:object={})=>JSON.stringify({jobId:'job-1',slot:0,objectId:'box-1',destination:[1,0,.5],tolerance:.05,...over});
-const receipt=(over:object={})=>JSON.stringify({jobId:'job-1',objectId:'box-1',evidence:'measured',released:true,supported:true,settled:true,position:[1.01,0,.5],simulationTime:12.5,...over});
-const open=()=>authorize(EMPTY_DELIVERY,0,job());
+const request=(over:object={})=>JSON.stringify({sequence:1,jobId:'job-1',objectId:'cargo-0',destinationId:'station-1',ownerSlot:0,nativeReady:true,...over});
+/** Shaped like the placed receipt in physics/ranger.py, with the fields the live adapter adds. */
+const receipt=(over:object={})=>JSON.stringify({event:'placed',job_id:'job-1',object_id:'cargo-0',owner_slot:0,destination_id:'station-1',tick:7421,time:14.842,evidence:'measured',settled_samples:50,position:[.6,0,.82],target:[.6,.0013,.82],support_force:1.1772,linear_speed:.0004,tilt_deg:.3,fingers_open:true,robot_contact:false,positioned:true,valid:true,...over});
+const active=()=>authorize(null,0,request());
+const placed=()=>confirm(active(),'job-1',receipt());
 
-describe('authorizing a delivery',()=>{
-  test('opens one job for this Ranger and changes nothing on an exact retry',()=>{
-    const first=open();expect(first.current?.status).toBe('authorized');expect(authorize(first,0,job())).toBe(first);
+describe('authorizeDelivery',()=>{
+  test('saves one authorized job, and an exact retry changes nothing',()=>{
+    const first=active();
+    expect([first.status,first.sequence,first.jobId,first.ownerSlot]).toEqual(['authorized',1,'job-1',0]);
+    expect(authorize(first,0,request())).toBe(first);
   });
   test('a Ranger can only authorize work on its own hardware',()=>{
-    expect(()=>authorize(EMPTY_DELIVERY,1,job())).toThrow();
-    expect(authorize(EMPTY_DELIVERY,1,job({slot:1})).current?.job.slot).toBe(1);
+    expect(()=>authorize(null,1,request())).toThrow();
+    expect(authorize(null,1,request({ownerSlot:1})).ownerSlot).toBe(1);
   });
-  test('one open job at a time, and a job ID means one job',()=>{
-    const first=open();
-    expect(()=>authorize(first,0,job({jobId:'job-2'}))).toThrow();
-    expect(()=>authorize(first,0,job({objectId:'box-2'}))).toThrow();
+  test('the native worker must be ready',()=>{for(const nativeReady of [false,undefined,'true'])expect(()=>authorize(null,0,request({nativeReady}))).toThrow();});
+  test('a conflicting retry or a new job while active is refused',()=>{
+    const first=active();
+    expect(()=>authorize(first,0,request({objectId:'cargo-1'}))).toThrow();
+    expect(()=>authorize(first,0,request({sequence:2,jobId:'job-2'}))).toThrow();
   });
-  test('malformed jobs are refused',()=>{
-    for(const bad of [{jobId:''},{jobId:'a b'},{objectId:''},{slot:4},{slot:1.5},{destination:[1,2]},{destination:[1,2,NaN]},{destination:'x'},{tolerance:0},{tolerance:-1},{tolerance:2},{tolerance:NaN}])
-      expect(()=>authorize(EMPTY_DELIVERY,0,job(bad))).toThrow();
-    expect(()=>authorize(EMPTY_DELIVERY,0,'null')).toThrow();
+  test('sequences cannot skip, and job IDs cannot be reused',()=>{
+    expect(()=>authorize(null,0,request({sequence:2}))).toThrow();
+    const done=placed();
+    expect(()=>authorize(done,0,request({sequence:3,jobId:'job-2'}))).toThrow();
+    expect(()=>authorize(done,0,request({sequence:2}))).toThrow();
+    const next=authorize(done,0,request({sequence:2,jobId:'job-2'}));expect(next.status).toBe('authorized');
+    const later=authorize(cancel(next,'job-2'),0,request({sequence:3,jobId:'job-3'}));
+    expect(()=>authorize(cancel(later,'job-3'),0,request({sequence:4}))).toThrow();
   });
-});
-
-describe('recording a placement',()=>{
-  test('measured evidence that matches the job closes it as delivered',()=>{
-    const done=recordPlacement(open(),receipt());
-    expect(done.current?.status).toBe('delivered');expect(done.delivered).toBe(1);
-  });
-  test('an exact retry counts once, and a different receipt is refused',()=>{
-    const done=recordPlacement(open(),receipt());
-    expect(recordPlacement(done,receipt())).toBe(done);
-    expect(()=>recordPlacement(done,receipt({simulationTime:13}))).toThrow();
-  });
-  test('a timer, a claim or a kinematic preview cannot deliver',()=>{
-    for(const evidence of ['kinematic','timer',undefined,''])expect(()=>recordPlacement(open(),receipt({evidence}))).toThrow();
-  });
-  test('the object must be released, supported and settled',()=>{
-    for(const bad of [{released:false},{supported:false},{settled:false},{released:undefined},{settled:'yes'}])expect(()=>recordPlacement(open(),receipt(bad))).toThrow();
-  });
-  test('it must be the right job, the right object, and at the destination',()=>{
-    expect(()=>recordPlacement(EMPTY_DELIVERY,receipt())).toThrow();
-    expect(()=>recordPlacement(open(),receipt({jobId:'other'}))).toThrow();
-    expect(()=>recordPlacement(open(),receipt({objectId:'box-2'}))).toThrow();
-    expect(()=>recordPlacement(open(),receipt({position:[1.06,0,.5]}))).toThrow();
-    expect(recordPlacement(open(),receipt({position:[1.04,0,.5]})).delivered).toBe(1);
-    for(const bad of [{position:[1,0]},{position:[NaN,0,.5]},{simulationTime:-1},{simulationTime:NaN}])expect(()=>recordPlacement(open(),receipt(bad))).toThrow();
-  });
-  test('a failed receipt attempt leaves the job open',()=>{
-    const first=open();try{recordPlacement(first,receipt({released:false}));}catch{}
-    expect(first.current?.status).toBe('authorized');expect(recordPlacement(first,receipt()).delivered).toBe(1);
+  test('malformed requests are refused',()=>{
+    for(const bad of [{sequence:0},{sequence:1.5},{jobId:''},{jobId:'a b'},{objectId:''},{destinationId:7}])expect(()=>authorize(null,0,request(bad))).toThrow();
+    expect(()=>authorize(null,0,'null')).toThrow();
   });
 });
 
-describe('failing and moving on',()=>{
-  test('a failure closes the job with a reason, so the Ranger is not stuck',()=>{
-    const failed=failDelivery(open(),'job-1','dropped during carry');
-    expect(failed.current?.status).toBe('failed');expect(failed.failed).toBe(1);
-    expect(failDelivery(failed,'job-1','dropped during carry')).toBe(failed);
-    expect(()=>failDelivery(failed,'job-1','something else')).toThrow();
-    expect(()=>recordPlacement(failed,receipt())).toThrow();
-    expect(authorize(failed,0,job({jobId:'job-2'})).current?.job.jobId).toBe('job-2');
+describe('confirmDelivery',()=>{
+  test('a measured receipt marks the job placed and keeps the receipt',()=>{
+    const done=placed();expect(done.status).toBe('placed');expect(done.receipt?.support_force).toBe(1.1772);expect(done.sequence).toBe(1);
   });
-  test('a delivered job cannot be failed afterward, and a reason is required',()=>{
-    expect(()=>failDelivery(recordPlacement(open(),receipt()),'job-1','late')).toThrow();
-    expect(()=>failDelivery(open(),'job-1','')).toThrow();expect(()=>failDelivery(open(),'other','x')).toThrow();
-    expect(()=>failDelivery(open(),'job-1','x'.repeat(201))).toThrow();
+  test('an exact retry changes nothing, and a different receipt is refused',()=>{
+    const done=placed();expect(confirm(done,'job-1',receipt())).toBe(done);
+    expect(()=>confirm(done,'job-1',receipt({tick:7422}))).toThrow();
   });
-  test('a finished job ID can never be reused, including after it leaves the current slot',()=>{
-    let r:DeliveryRecord=recordPlacement(open(),receipt());
-    r=authorize(r,0,job({jobId:'job-2'}));expect(r.history).toEqual([{jobId:'job-1',status:'delivered'}]);
-    r=failDelivery(r,'job-2','stopped');r=authorize(r,0,job({jobId:'job-3'}));
-    expect(()=>authorize(r,0,job())).toThrow();expect(r.delivered).toBe(1);expect(r.failed).toBe(1);
+  test('a timer, a claim or a preview cannot place',()=>{
+    for(const evidence of ['kinematic','timer',undefined,''])expect(()=>confirm(active(),'job-1',receipt({evidence}))).toThrow();
+    expect(()=>confirm(active(),'job-1',receipt({event:'carry'}))).toThrow();
   });
-  test('history is bounded',()=>{
-    let r=EMPTY_DELIVERY;
-    for(let i=0;i<40;i++){r=authorize(r,0,job({jobId:`j${i}`}));r=failDelivery(r,`j${i}`,'stop');}
-    r=authorize(r,0,job({jobId:'last'}));expect(r.history.length).toBe(32);expect(r.failed).toBe(40);
+  test('it must match the job exactly',()=>{
+    expect(()=>confirm(null,'job-1',receipt())).toThrow();expect(()=>confirm(active(),'other',receipt())).toThrow();
+    for(const bad of [{job_id:'other'},{job_id:null},{object_id:'cargo-1'},{owner_slot:1},{destination_id:'station-2'}])expect(()=>confirm(active(),'job-1',receipt(bad))).toThrow();
+  });
+  test('every measured limit is enforced',()=>{
+    for(const bad of [{settled_samples:49},{settled_samples:undefined},{support_force:.5},{support_force:NaN},{linear_speed:.02},{tilt_deg:8},{tilt_deg:-8},
+      {fingers_open:false},{fingers_open:'yes'},{robot_contact:true},{robot_contact:undefined},{positioned:false},{valid:false},{valid:undefined},
+      {position:[.6,.03,.82]},{position:[.6,0,.84]},{position:[.6,0]},{target:null},{tick:-1},{tick:1.5},{time:-1},{time:null}])
+      expect(()=>confirm(active(),'job-1',receipt(bad))).toThrow();
+  });
+  test('the actor checks position itself, even if the native side says valid',()=>{
+    expect(()=>confirm(active(),'job-1',receipt({position:[.7,0,.82],valid:true,positioned:true}))).toThrow();
+  });
+  test('a refused receipt leaves the job active, so a good one can still land',()=>{
+    const first=active();try{confirm(first,'job-1',receipt({valid:false}));}catch{}
+    expect(first.status).toBe('authorized');expect(confirm(first,'job-1',receipt()).status).toBe('placed');
+  });
+});
+
+describe('cancelDelivery',()=>{
+  test('cancels an active job, and is safe to repeat',()=>{
+    const stopped=cancel(active(),'job-1');expect(stopped.status).toBe('cancelled');
+    expect(cancel(stopped,'job-1')).toBe(stopped);
+    expect(()=>confirm(stopped,'job-1',receipt())).toThrow();
+  });
+  test('never overwrites a completed receipt',()=>{
+    const done=placed(),after=cancel(done,'job-1');expect(after).toBe(done);expect(after.status).toBe('placed');expect(after.receipt).toBeDefined();
+  });
+  test('needs the right job',()=>{expect(()=>cancel(null,'job-1')).toThrow();expect(()=>cancel(active(),'other')).toThrow();});
+  test('remembered job IDs are bounded',()=>{
+    let r:DeliveryRecord|null=null;
+    for(let i=1;i<=80;i++){r=authorize(r,0,request({sequence:i,jobId:`j${i}`}));r=cancel(r,`j${i}`);}
+    expect(r!.pastJobs.length).toBe(64);expect(r!.sequence).toBe(80);
   });
 });
 
@@ -86,20 +90,22 @@ mock.module('terse-sdk/actor',()=>({Actor:class {id='unit-ranger';},Persisted:()
 const {WorldRanger}=await import('./src/world-actor');
 const actor=async(slot:number)=>{const a=new (WorldRanger as any)();await a.initialize(slot);return a;};
 describe('WorldRanger delivery methods (mock SDK)',()=>{
-  test('uninitialized actors refuse',async()=>{await expect(new (WorldRanger as any)().authorizeDelivery(job())).rejects.toThrow();});
-  test('the actor applies its own slot, and each actor keeps its own record',async()=>{
-    const a=await actor(0),b=await actor(1);await a.authorizeDelivery(job());
-    await expect(b.authorizeDelivery(job())).rejects.toThrow();
-    expect(JSON.parse(await b.inspectDelivery()).current).toBe(null);
+  test('uninitialized actors refuse',async()=>{await expect(new (WorldRanger as any)().authorizeDelivery(request())).rejects.toThrow();});
+  test('inspect returns {} before any job, and each actor keeps its own record',async()=>{
+    const a=await actor(0),b=await actor(1);expect(await a.inspectDelivery()).toBe('{}');
+    await a.authorizeDelivery(request());await expect(b.authorizeDelivery(request())).rejects.toThrow();
+    expect(await b.inspectDelivery()).toBe('{}');
   });
-  test('a full job round trip, leaving other records alone',async()=>{
+  test('a full round trip returns sequence, status and receipt, leaving other records alone',async()=>{
     const a=await actor(0),before=JSON.parse(await a.inspect());
-    await a.authorizeDelivery(job());const done=JSON.parse(await a.recordPlacement(receipt()));
-    expect(done.current.status).toBe('delivered');expect(done.current.receipt.position).toEqual([1.01,0,.5]);
+    expect(JSON.parse(await a.authorizeDelivery(request())).status).toBe('authorized');
+    const done=JSON.parse(await a.confirmDelivery('job-1',receipt()));
+    expect([done.sequence,done.status,done.receipt.tick]).toEqual([1,'placed',7421]);
+    expect(await a.inspectDelivery()).toBe(JSON.stringify(done));
     const after=JSON.parse(await a.inspect());expect([after.decisions,after.sequence]).toEqual([before.decisions,before.sequence]);
   });
-  test('failure is available through the actor',async()=>{
-    const a=await actor(2);await a.authorizeDelivery(job({slot:2}));
-    expect(JSON.parse(await a.failDelivery('job-1','dropped')).current.reason).toBe('dropped');
+  test('cancel is available through the actor',async()=>{
+    const a=await actor(2);await a.authorizeDelivery(request({ownerSlot:2}));
+    expect(JSON.parse(await a.cancelDelivery('job-1')).status).toBe('cancelled');
   });
 });

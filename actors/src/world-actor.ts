@@ -1,12 +1,16 @@
 import {Actor, Persisted, Ephemeral} from "terse-sdk/actor";
 import {waypoint, validateRequest, type PlanRequest} from "./world-policy";
+<<<<<<< HEAD
 import {chooseSlot, validateBuild, type BuildObservation} from "./build-policy";
 import {EMPTY_DELIVERY, authorize, failDelivery, recordPlacement, type DeliveryRecord} from "./delivery-policy";
+=======
+import {authorize, cancel, confirm, type DeliveryRecord} from "./delivery-policy";
+>>>>>>> wren/builder-actor
 
 type Memory = {slot:number; seed:number; decisions:number; epoch:number; sequence:number; input:string;
   mode:"roam"|"assemble"; target:number[]; docked:boolean};
 
-const readDelivery = (saved:string):DeliveryRecord => saved ? JSON.parse(saved) : EMPTY_DELIVERY;
+const readDelivery = (saved:string):DeliveryRecord|null => saved ? JSON.parse(saved) : null;
 
 /** One real, independently persisted actor for each complete robot. */
 export class WorldRanger extends Actor {
@@ -28,12 +32,12 @@ export class WorldRanger extends Actor {
 
   /**
    * Preview receipt for the slot this Ranger claimed, counted once per claim. A timed animation is never proof
-   * of a physical placement, so this only ever records "kinematic". Measured work goes through recordPlacement.
+   * of a physical placement, so this only ever records "kinematic". Measured work goes through confirmDelivery.
    */
   async confirmPlaced(sequence:number, slotId:number, evidence:"kinematic"): Promise<string> {
     if(!this.buildRecord)throw new Error("No build claim to confirm");
     const memory=JSON.parse(this.buildRecord);
-    if(evidence!=="kinematic")throw new Error("A preview receipt can only be kinematic; measured work uses recordPlacement");
+    if(evidence!=="kinematic")throw new Error("A preview receipt can only be kinematic; measured work uses confirmDelivery");
     if(memory.sequence!==sequence||memory.action!=="claim"||memory.slotId!==slotId)throw new Error("Placement receipt does not match the saved claim");
     if(memory.confirmed===sequence)return this.buildRecord;
     this.buildRecord=JSON.stringify({...memory,confirmed:sequence,placed:[...memory.placed,{slotId,evidence}]});
@@ -48,20 +52,21 @@ export class WorldRanger extends Actor {
     return this.deliveryRecord;
   }
 
-  /** Close the job only with a measured receipt from the native adapter, under the same job ID. */
-  async recordPlacement(input:string): Promise<string> {
+  /** Marks the job placed, only with the native adapter's measured receipt for this exact job. */
+  async confirmDelivery(jobId:string, receiptJson:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
-    this.deliveryRecord=JSON.stringify(recordPlacement(readDelivery(this.deliveryRecord),input));
+    this.deliveryRecord=JSON.stringify(confirm(readDelivery(this.deliveryRecord),jobId,receiptJson));
     return this.deliveryRecord;
   }
 
-  async failDelivery(jobId:string, reason:string): Promise<string> {
+  /** Stops an active job on an explicit stop. A completed receipt is left as it is. */
+  async cancelDelivery(jobId:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
-    this.deliveryRecord=JSON.stringify(failDelivery(readDelivery(this.deliveryRecord),jobId,reason));
+    this.deliveryRecord=JSON.stringify(cancel(readDelivery(this.deliveryRecord),jobId));
     return this.deliveryRecord;
   }
 
-  async inspectDelivery(): Promise<string> {return JSON.stringify(readDelivery(this.deliveryRecord));}
+  async inspectDelivery(): Promise<string> {return this.deliveryRecord||"{}";}
 
   async authorizePhysics(input:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");

@@ -48,7 +48,7 @@ The world sits in a procedural city, with one chase camera per Ranger while they
 
 Each `WorldRanger` chooses its own next job (`decideBuild`), saves that claim, and saves a receipt per slot (`confirmPlaced`). The world starts no work on a slot until the claim is saved, and a beam does not lift until both carriers are in place. Crate colours show who placed what.
 
-**This is not physical construction.** Walking, lifting and placing are timed animation, and crates are not simulated objects. Every receipt it writes says `evidence: "kinematic"`, which is not proof of a placement; physical work has a separate path (`authorizeDelivery` and `recordPlacement`) that accepts only measured receipts, and the live adapter that writes them is still in progress. Building stops during assembly, in combined form and in the MuJoCo rig, and picks up again afterward. Like other world state, the structure is in memory and does not survive a launcher restart, though the actors' records do.
+**This is not physical construction.** Walking, lifting and placing are timed animation, and crates are not simulated objects. Every receipt it writes says `evidence: "kinematic"`, which is not proof of a placement; physical work has a separate path (`authorizeDelivery` and `confirmDelivery`) that accepts only measured receipts, and the live adapter that writes them is still in progress. Building stops during assembly, in combined form and in the MuJoCo rig, and picks up again afterward. Like other world state, the structure is in memory and does not survive a launcher restart, though the actors' records do.
 
 ### What this prototype does—and does not—prove
 
