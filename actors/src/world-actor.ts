@@ -1,11 +1,7 @@
 import {Actor, Persisted, Ephemeral} from "terse-sdk/actor";
 import {waypoint, validateRequest, type PlanRequest} from "./world-policy";
-<<<<<<< HEAD
 import {chooseSlot, validateBuild, type BuildObservation} from "./build-policy";
-import {EMPTY_DELIVERY, authorize, failDelivery, recordPlacement, type DeliveryRecord} from "./delivery-policy";
-=======
 import {authorize, cancel, confirm, type DeliveryRecord} from "./delivery-policy";
->>>>>>> wren/builder-actor
 
 type Memory = {slot:number; seed:number; decisions:number; epoch:number; sequence:number; input:string;
   mode:"roam"|"assemble"; target:number[]; docked:boolean};
