@@ -19,6 +19,7 @@ SPEC.loader.exec_module(locomotion)
 mujoco, np = locomotion.mujoco, locomotion.np
 DT, SIDES, smooth = locomotion.DT, locomotion.SIDES, locomotion.smooth
 ARM_PARTS = ("shoulder_roll", "shoulder", "elbow", "wrist_yaw", "wrist_roll", "wrist")
+DESTINATION = np.array([.93, .83, .99])
 
 
 def model_xml():
@@ -57,6 +58,7 @@ def model_xml():
             actuator.set("kv", "45")
             actuator.set("forcerange", "-80 80" if "wrist" not in part else "-30 30")
     ET.SubElement(world, "geom", name="pickup_stand", type="box", size=".09 .09 .47", pos=".56 .83 .47", rgba=".65 .53 .37 1")
+    ET.SubElement(world, "geom", name="destination_stand", type="box", size=".1 .1 .47", pos=".93 .83 .47", rgba=".3 .55 .39 1")
     box = ET.SubElement(world, "body", name="cargo", pos=".56 .83 .995")
     ET.SubElement(box, "freejoint", name="cargo_root")
     ET.SubElement(box, "geom", name="cargo", type="box", size=".05 .05 .05", mass=".12", friction="1.2 .01 .001", rgba=".92 .71 .29 1", condim="4")
@@ -64,7 +66,8 @@ def model_xml():
 
 
 class Ranger(locomotion.Biped):
-    def __init__(self):
+    def __init__(self, delivery=False):
+        self.delivery = delivery
         super().__init__(gait="brisk", model_source=model_xml())
         self.arm_joints = {s: np.array([self.model.joint(f"{s}_{p}").id for p in ARM_PARTS]) for s in SIDES}
         self.arm_qids = {s: self.model.jnt_qposadr[j] for s, j in self.arm_joints.items()}
@@ -75,6 +78,8 @@ class Ranger(locomotion.Biped):
         self.finger_acts = {s: [self.model.actuator(f"{s}_finger_{i}").id for i in range(2)] for s in SIDES}
         self.cargo, self.cargo_geom = self.model.body("cargo").id, self.model.geom("cargo").id
         self.stand_geom = self.model.geom("pickup_stand").id
+        self.destination_geom = self.model.geom("destination_stand").id
+        self.cargo_dof = self.model.jnt_dofadr[self.model.joint("cargo_root").id]
         self.reset_job_state()
 
     def reset(self):
@@ -96,6 +101,10 @@ class Ranger(locomotion.Biped):
         self.max_lift = 0.
         self.cargo_start = self.data.xpos[self.cargo].copy()
         self.receipts = []
+        self.placed = False
+        self.place_samples = 0
+        self.support_samples = 0
+        self.job_id = None
 
     def grip_contacts(self):
         touches = {i: False for i in self.fingers["right"]}
@@ -114,19 +123,45 @@ class Ranger(locomotion.Biped):
 
     def cargo_supported(self):
         return any(self.cargo_geom in (c.geom1, c.geom2) and
-                   (self.floor in (c.geom1, c.geom2) or self.stand_geom in (c.geom1, c.geom2))
+                   any(g in (c.geom1, c.geom2) for g in (self.floor, self.stand_geom, self.destination_geom))
                    and c.dist < .001 for c in self.data.contact[:self.data.ncon])
 
     def set_job(self, job):
         self.job, self.job_tick = job, self.tick
         self.event(f"Physical Ranger: {job}.")
 
-    def start_job(self):
+    def start_job(self, job_id=None):
         if self.job != "idle" or self.failed:
             raise ValueError("Start from a healthy idle Ranger")
+        if job_id is not None and (not isinstance(job_id, str) or not 1 <= len(job_id) <= 100 or not all(c.isalnum() or c in "-_" for c in job_id)):
+            raise ValueError("Use a bounded job identifier")
+        self.job_id = job_id
         self.job_goal_steps = self.steps+2
         self.mode(True)
         self.set_job("approach")
+
+    def placement_observation(self):
+        force, robot_contact = 0., False
+        for index, contact in enumerate(self.data.contact[:self.data.ncon]):
+            pair = {int(contact.geom1), int(contact.geom2)}
+            if self.cargo_geom not in pair or contact.dist >= .001:
+                continue
+            other = next(iter(pair-{self.cargo_geom}))
+            if other == self.destination_geom:
+                wrench = np.zeros(6)
+                mujoco.mj_contactForce(self.model, self.data, index, wrench)
+                force += abs(float(wrench[0]))
+            if self.model.body_rootid[self.model.geom_bodyid[other]] == self.pelvis:
+                robot_contact = True
+        error = self.data.xpos[self.cargo]-DESTINATION
+        speed = float(np.linalg.norm(self.data.qvel[self.cargo_dof:self.cargo_dof+3]))
+        tilt = math.degrees(math.acos(float(np.clip(self.data.xmat[self.cargo].reshape(3, 3)[2, 2], -1, 1))))
+        finger_open = all(self.data.qpos[self.model.jnt_qposadr[self.model.joint(f"right_finger_{i}").id]] < .01 for i in range(2))
+        positioned = float(np.linalg.norm(error[:2])) < .025 and abs(float(error[2])) < .015 and tilt < 8
+        return {"destination_id": "station-1", "position": self.data.xpos[self.cargo].tolist(),
+                "target": DESTINATION.tolist(), "support_force": force, "robot_contact": robot_contact,
+                "linear_speed": speed, "tilt_deg": tilt, "fingers_open": finger_open,
+                "positioned": positioned, "valid": positioned and force > .5 and speed < .02 and finger_open and not robot_contact}
 
     def arm_ik(self, side, target):
         scratch = self.scratch
@@ -240,6 +275,64 @@ class Ranger(locomotion.Biped):
             contacts, forces = self.grip_contacts()
             if not all(contacts) or min(forces) <= .3 or self.cargo_supported():
                 self.failed = "Cargo did not remain physically held"
+            elif self.delivery and elapsed >= 1:
+                self.body_origin = self.body_target.copy()
+                self.body_center = self.body_target.copy()
+                self.body_center[:2] = (self.anchors["left"][:2]+self.anchors["right"][:2])/2-self.com_offset[:2]
+                self.set_job("center_for_place")
+                elapsed = 0
+        if self.job == "center_for_place":
+            self.body_target = self.body_origin+smooth(elapsed/2)*(self.body_center-self.body_origin)
+            self.hand_target = self.data.qpos[:3]+self.carry_offset
+            if elapsed >= 2.5:
+                self.hand_origin = self.hand_target.copy()
+                self.place_target = DESTINATION+(self.data.site_xpos[self.hand_sites["right"]]-self.data.xpos[self.cargo])
+                self.place_target[2] -= .002
+                self.place_above = self.place_target+np.array([0., 0., .15])
+                self.set_job("place_reach")
+                elapsed = 0
+        if self.job == "place_reach":
+            self.hand_target = self.hand_origin+smooth(elapsed/2)*(self.place_above-self.hand_origin)
+            if elapsed >= 2.5:
+                if np.linalg.norm(self.data.site_xpos[self.hand_sites["right"]]-self.place_above) < .025:
+                    self.hand_origin = self.hand_target.copy()
+                    self.set_job("place_lower")
+                    elapsed = 0
+                elif elapsed > 5:
+                    self.failed = "Gripper did not reach above the destination"
+        if self.job == "place_lower":
+            self.hand_target = self.hand_origin+smooth(elapsed/2)*(self.place_target-self.hand_origin)
+            observation = self.placement_observation()
+            self.support_samples = self.support_samples+1 if observation["positioned"] and observation["support_force"] > .3 else 0
+            if elapsed >= 2 and self.support_samples >= 20:
+                self.grip_closed = False
+                self.set_job("release")
+                elapsed = 0
+            elif elapsed > 5:
+                self.failed = "Cargo did not contact the destination at its target pose"
+        if self.job == "release":
+            observation = self.placement_observation()
+            if elapsed >= .5 and observation["fingers_open"] and not observation["robot_contact"]:
+                self.hand_origin = self.hand_target.copy()
+                self.set_job("withdraw")
+                elapsed = 0
+            elif elapsed > 3:
+                self.failed = "Gripper did not physically release the cargo"
+        if self.job == "withdraw":
+            self.hand_target = self.hand_origin+np.array([-.05, 0., .15])*smooth(elapsed/2)
+            observation = self.placement_observation()
+            self.place_samples = self.place_samples+1 if elapsed >= 2 and observation["valid"] else 0
+            if self.place_samples >= 50:
+                self.placed = True
+                self.receipts.append({"event": "placed", "time": self.tick*DT, "tick": self.tick,
+                                      "evidence": "measured", "settled_samples": self.place_samples, **observation})
+                self.set_job("complete")
+            elif elapsed > 5:
+                self.failed = "Released cargo did not settle on the target without robot support"
+        if self.job in ("center_for_place", "place_reach"):
+            contacts, forces = self.grip_contacts()
+            if not all(contacts) or min(forces) <= .3 or self.cargo_supported():
+                self.failed = "Cargo was not continuously held before placement"
         super().control()
         if self.hand_target is not None:
             angles = self.arm_ik("right", self.hand_target)
@@ -259,19 +352,20 @@ class Ranger(locomotion.Biped):
                       arm_angles=self.data.qpos[self.arm_qids["right"]].tolist(),
                       arm_targets=self.targets[self.arm_acts["right"]].tolist(),
                       hand_target=None if self.hand_target is None else self.hand_target.tolist(),
-                      manipulation_receipts=[dict(r, object_id="cargo-0", owner_slot=0) for r in self.receipts],
+                      manipulation_receipts=[dict(r, object_id="cargo-0", owner_slot=0, job_id=self.job_id) for r in self.receipts],
+                      job_id=self.job_id, delivery=self.delivery, placement=self.placement_observation(),
                       actor_binding=None,
                       objects=[{"id": "cargo-0", "position": self.data.xpos[self.cargo].tolist(),
                                 "quaternion": self.data.xquat[self.cargo].tolist(), "mass_kg": .12,
                                 "held_by": {"slot": 0, "hand": "right"} if held else None,
-                                "supported": self.cargo_supported(), "placed": False}])
+                                "supported": self.cargo_supported(), "placed": self.placed and self.placement_observation()["valid"]}])
         return result
 
 
-def trial(seconds=40):
+def trial(seconds=40, delivery=False):
     if not 0 < seconds <= 90:
         raise ValueError("Use at most 90 simulated seconds")
-    sim, started = Ranger(), time.monotonic()
+    sim, started = Ranger(delivery=delivery), time.monotonic()
     sim.step(50)
     sim.step(50)
     sim.step(50)
@@ -280,14 +374,51 @@ def trial(seconds=40):
         if time.monotonic()-started > 240:
             raise TimeoutError("Manipulation trial exceeded its wall-clock bound")
         sim.step()
-        if sim.failed or (sim.job == "holding" and sim.tick-sim.job_tick >= 100):
+        if sim.failed or (sim.job == ("complete" if delivery else "holding") and sim.tick-sim.job_tick >= 100):
             break
     return sim.state()
 
 
+def worker_command(sim, request):
+    """Closed command surface: one fixed job, no live reset or object pose writes."""
+    if not isinstance(request, dict):
+        raise ValueError("An object command is required")
+    command = request.get("command")
+    if command == "step":
+        sim.step(request.get("ticks", 1))
+    elif command == "deliver":
+        job_id = request.get("jobId")
+        if (not isinstance(job_id, str) or not job_id.isascii() or not 1 <= len(job_id) <= 100
+                or request.get("objectId") != "cargo-0" or request.get("destinationId") != "station-1"):
+            raise ValueError("A known delivery and bounded job ID are required")
+        if sim.tick < 150 or not sim.delivery:
+            raise ValueError("Settle a delivery Ranger before authorizing its job")
+        sim.start_job(job_id)
+    elif command != "state":
+        raise ValueError("Unknown Ranger command")
+    return sim.state(geometry=True)
+
+
+def worker():
+    sim = Ranger(delivery=True)
+    while line := sys.stdin.readline(2049):
+        if len(line) > 2048:
+            print(json.dumps({"ok": False, "error": "Small worker command required"}), flush=True)
+            return
+        try:
+            state = worker_command(sim, json.loads(line))
+            print(json.dumps({"ok": True, "state": state}), flush=True)
+        except Exception:
+            print(json.dumps({"ok": False, "error": "Ranger command refused"}), flush=True)
+
+
 if __name__ == "__main__":
+    if "--worker" in sys.argv:
+        worker()
+        raise SystemExit(0)
     seconds = float(sys.argv[sys.argv.index("--trial")+1]) if "--trial" in sys.argv else 40.
-    result = trial(seconds)
+    delivery = "--deliver" in sys.argv
+    result = trial(seconds, delivery)
     print(json.dumps(result))
-    if result["failed"] or result["job"] != "holding":
+    if result["failed"] or result["job"] != ("complete" if delivery else "holding"):
         raise SystemExit(2)
