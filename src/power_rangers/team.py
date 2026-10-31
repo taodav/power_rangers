@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 from threading import Event, Lock
+import time
 import uuid
 
 from .actors import ActorError, encode
@@ -53,6 +54,7 @@ class LegBrain:
         self.client = OpenAIProposer(model, api_key())
 
     def decide(self, request):
+        started = time.perf_counter()
         result = self.client.request({'model': self.client.model, 'instructions': INSTRUCTIONS,
             'input': encode({'your_leg': request['leg'], 'durable_context': json.loads(request['contextJson']),
                              'your_previous_decisions': request['previous']}),
@@ -65,7 +67,8 @@ class LegBrain:
         plan = json.loads(calls[0]['arguments'])
         validate_plan(plan)
         return {'request_id': request['id'], 'leg': request['leg'], 'plan': plan,
-                'response_id': result['id'], 'model': result['model'], 'usage': result.get('usage', {})}
+                'response_id': result['id'], 'model': result['model'], 'usage': result.get('usage', {}),
+                'model_wall_ms': round((time.perf_counter()-started)*1000)}
 
 
 class TeamSession:
@@ -77,6 +80,7 @@ class TeamSession:
         self.cancelled = Event()
         self.lock = Lock()
         self.progress = {'stage': 'ready', 'round': 0, 'legs': {}, 'message': ''}
+        self.planning_record = None
         self.error = None
         self.recovery = None
         self.latest = Path(runtime.data_dir) / 'latest-team.json'
@@ -107,7 +111,15 @@ class TeamSession:
 
     def _progress(self, **values):
         with self.lock:
+            if ('stage' in values and values['stage'] != self.progress.get('stage')
+                    or 'round' in values and values['round'] != self.progress.get('round')):
+                self.progress['stage_started_at_ms'] = round(time.time()*1000)
             self.progress.update(values)
+
+    def _published(self, state):
+        """Expose only acknowledged actor writes, even before physics starts."""
+        with self.lock:
+            self.planning_record = deepcopy({key: state.get(key) for key in ('rounds', 'draft', 'validation', 'validations')})
 
     def _leg_progress(self, leg, value):
         with self.lock:
@@ -121,6 +133,7 @@ class TeamSession:
 
     def _negotiate(self):
         state = self.runtime.call('TeamBody', self.episode, 'inspect')
+        self._published(state)
         initial_cp = json.loads(state['checkpoint'])
         for round_index in range(4):
             if self.cancelled.is_set():
@@ -138,7 +151,7 @@ class TeamSession:
                     'trial_feedback': state['validation']['results'] if state['validation'] else None}
                 self._progress(stage='proposing' if round_index == 0 else 'negotiating', round=round_index,
                                message='Each Ranger proposes independently' if round_index == 0 else 'Rangers read their peers and revise their own plans',
-                               legs={leg: {'status': 'thinking'} for leg in LEGS})
+                               legs={leg: {'status': 'thinking', 'started_at_ms': round(time.time()*1000)} for leg in LEGS})
                 def decide(leg):
                     request = self.runtime.call('TeamRanger', f'{self.episode}.{leg}', 'request', encode(context))
                     decision = request['decision']
@@ -154,21 +167,25 @@ class TeamSession:
                 if self.cancelled.is_set():
                     return None
                 state = self.runtime.call('TeamBody', self.episode, 'publish', round_index, encode(decisions))
+                self._published(state)
             if round_index == 0:
                 continue
             if state['validation'] and state['validation']['round'] == round_index:
                 results = state['validation']['results']
             else:
-                self._progress(stage='checking', round=round_index, message='Testing the joint policy in unassisted MuJoCo')
+                self._progress(stage='checking', round=round_index, message='Testing the joint policy in unassisted MuJoCo',
+                               trial={'completed': 0, 'total': 2, 'results': []})
                 schedule = LegSchedule({d['leg']: d['plan'] for d in decisions})
                 results = []
                 for seed in (0, 1):
                     if self.cancelled.is_set():
                         return None
                     results.append(compact(evaluate(schedule, 6., seed)))
+                    self._progress(trial={'completed': len(results), 'total': 2, 'results': deepcopy(results)})
                 if self.cancelled.is_set():
                     return None
                 state = self.runtime.call('TeamBody', self.episode, 'validate', round_index, encode(results))
+                self._published(state)
             # Require one feedback-driven refinement pass, even when the seed works.
             if state['validation']['accepted'] and round_index >= 2:
                 self._progress(stage='ready', message='Four independently timed policies agreed and tested')
@@ -219,6 +236,7 @@ class TeamSession:
 
     def recover(self):
         self.record = self.runtime.call('TeamBody', self.episode, 'inspect')
+        self._published(self.record)
         self.sim.restore(json.loads(self.record['checkpoint']))
         self.pending, self.error = None, None
         self._progress(stage='stopped' if self.record['stopped'] else self.sim.team['status'], message='Restored from durable state')
@@ -242,10 +260,15 @@ class TeamSession:
     def telemetry(self):
         with self.lock:
             progress = deepcopy(self.progress)
+            planning_record = deepcopy(self.planning_record)
+        source = self.record if self.record['agreement'] else planning_record or self.record
+        validation = source.get('validation')
         return {'episode': self.episode, 'revision': self.record['revision'],
             'committed_tick': json.loads(self.record['checkpoint'])['tick'], 'planning': progress,
-            'agreement': self.record['agreement'], 'validation': self.record['validation'],
-            'rounds': self.record['rounds'], 'stopped': self.record['stopped'],
+            'agreement': self.record['agreement'], 'validation': validation,
+            'validations': source.get('validations') or ([validation] if validation else []),
+            'rounds': source.get('rounds') or [], 'draft': source.get('draft'),
+            'checkpoint_pending': self.pending is not None, 'stopped': self.record['stopped'],
             'error': self.error, 'recovery': self.recovery}
 
     def close(self):

@@ -17,7 +17,9 @@ uv run rangers serve
 
 Open **http://127.0.0.1:8765** and select **Run demo**. Existing `.env` files with `OPENAI_API_KEY` work automatically. The default model is `gpt-6-astra` with low reasoning effort. A demo usually makes 12 model calls; the bounded negotiation allows at most 16. It uses the configured API credits.
 
-The page contains one demonstration: the robot, four Ranger decisions, a shared timeline, movement measurements, and durable recovery controls. Manual joint calibration, fixed gaits and tuning experiments are available as headless commands rather than competing dashboard modes.
+The page shows two connected loops: parallel Ranger proposals through shared Body memory and simulator feedback, then numerical execution of the accepted policies. The planning diagram follows actual progress, including individual saved responses and completed trials. Select a planning round and a Ranger to inspect its original explanation, parameter changes and measured feedback. New model calls include their elapsed wall time.
+
+The execution timeline compares commanded swings with measured ground contact, confirmed touchdowns and missed deadlines. Faded bars preview the accepted policy; separate live/saved markers show checkpoint progress. The last three simulation seconds of 20 ms samples are saved with the controller and survive refreshes and recovery. Older episodes without samples are labeled explicitly. Manual calibration and tuning experiments remain available as headless commands.
 
 - **Run demo:** negotiate and validate, then execute ten simulation seconds.
 - **Pause / Continue:** freeze and resume the simulation clock, retaining independent leg phases.
@@ -74,6 +76,6 @@ The earlier fixed/reactive/paired controllers and centralized gait search remain
 - `gallop.py`: numerical MPC/IK executor and contact-based evaluation.
 - `actors/src/actor.ts`: durable Rangers, shared Body and prior experiment actors.
 - `actors/src/team-contract.ts`: per-leg parameter validation; no pair-selection rule.
-- `server.py` / `dashboard.html`: the focused local demo; physics and rendering stay on the main thread.
+- `server.py` / `dashboard.html`, `dashboard.css`, `dashboard.js`: the local demo and live planning/execution visualization; physics and rendering stay on the main thread.
 
 The robot assets come from MuJoCo Playground 0.2.0 and its pinned [MuJoCo Menagerie Go1](https://github.com/google-deepmind/mujoco_menagerie/tree/1b86ece576591213e2b666ebf59508454200ca97/unitree_go1). Original assets and licenses remain in `.cache/go1/`. Actors use the official local Terse runtime, pinned by `actors/bun.lock`. Model requests use the official [OpenAI Responses function-calling API](https://developers.openai.com/api/docs/guides/function-calling).

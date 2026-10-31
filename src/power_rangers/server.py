@@ -20,6 +20,9 @@ def serve(port=8765, backend='native', rig=False):
     commands, lock = Queue(), Lock()
     shared = {'state': robot.state(), 'frame': view.jpeg()}
     html = Path(__file__).with_name('dashboard.html').read_bytes()
+    assets = {route: (Path(__file__).with_name(name).read_bytes(), mime) for route, name, mime in (
+        ('/demo.css', 'dashboard.css', 'text/css; charset=utf-8'),
+        ('/demo.js', 'dashboard.js', 'text/javascript; charset=utf-8'))}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -41,6 +44,9 @@ def serve(port=8765, backend='native', rig=False):
             path = self.path.split('?')[0]
             if path == '/':
                 return self.send(200, html, 'text/html; charset=utf-8')
+            if path in assets:
+                payload, mime = assets[path]
+                return self.send(200, payload, mime)
             with lock:
                 if path == '/api/state':
                     return self.send(200, json.dumps(shared['state']).encode())

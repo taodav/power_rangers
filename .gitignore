@@ -11,3 +11,4 @@ artifacts/
 .DS_Store
 node_modules/
 .durable-actors/
+video/

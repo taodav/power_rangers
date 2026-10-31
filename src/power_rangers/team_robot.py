@@ -57,7 +57,8 @@ class TeamRobot(Simulation):
         super().__init__(rig=False)
         self.controller = None
         self.team = {'status': 'ready', 'duration_s': 10., 'policy': None, 'actions': {}, 'events': [],
-                     'completed': 0, 'missed': 0, 'max_concurrent': 0, 'max_tilt': 0., 'start_x': float(self.data.qpos[0])}
+                     'completed': 0, 'missed': 0, 'max_concurrent': 0, 'max_tilt': 0., 'start_x': float(self.data.qpos[0]),
+                     'trace': []}
 
     def install(self, decisions, duration_s=10.):
         if self.tick != 0:
@@ -96,6 +97,11 @@ class TeamRobot(Simulation):
                         self._finish(leg, 'landed', 'Measured touchdown')
                     elif self.tick >= action['deadline_tick']:
                         self._finish(leg, 'late', 'Touchdown deadline missed; other legs keep their clocks')
+            # Measured 20ms samples, persisted with the controller checkpoint so
+            # refresh/recovery can draw actual history instead of polling guesses.
+            sample = {'tick': self.tick, 'swing': [bool(self.controller.previous[l]) for l in LEGS],
+                      'contact': [bool(contacts[l]) for l in LEGS]}
+            self.team['trace'] = [*self.team.get('trace', []), sample][-150:]
             tilt = self._tilt()
             self.team['max_tilt'] = max(self.team['max_tilt'], tilt)
             self.team['max_concurrent'] = max(self.team['max_concurrent'], sum(self.controller.previous.values()))

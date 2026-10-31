@@ -1,47 +1,77 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Power Rangers · Four actors, one body</title>
-<style>
-:root{color-scheme:light;--ink:#1e2936;--muted:#697684;--border:#e1e6eb;--blue:#2254db;--bg:#f4f6f8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px}button{font:inherit;cursor:pointer;border:1px solid var(--border);border-radius:9px;background:white;color:var(--ink);padding:10px 15px;font-weight:600;transition:background .15s}button:hover{background:#edf1f7}button:disabled{opacity:.42;cursor:default}.primary{background:var(--blue);color:white;border-color:var(--blue)}.primary:hover{background:#1943b8}button:focus-visible{outline:3px solid #86aaff;outline-offset:3px}main{max-width:1250px;margin:auto;padding:28px 30px 24px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}.brand{display:flex;align-items:center;gap:13px}.mark{display:grid;grid-template-columns:repeat(2,9px);gap:4px;transform:rotate(-10deg)}.mark i{width:9px;height:18px;border-radius:4px}.brand h1{font-size:23px;letter-spacing:-.7px;margin:0}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}.tag{background:white;border:1px solid var(--border);border-radius:20px;padding:7px 11px;font-size:12px;display:flex;align-items:center;gap:7px}.dot{width:7px;height:7px;border-radius:50%;background:#3b9b78}.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:stretch}.panel{border:1px solid var(--border);border-radius:15px;background:white;overflow:hidden}.viewport{position:relative;background:#e8eaed;min-height:370px;display:flex;align-items:center}.viewport img{width:100%;display:block;aspect-ratio:1.6;object-fit:contain}.scene-tag{position:absolute;top:16px;left:16px;background:#ffffffde;border:1px solid #ffffff;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:650;letter-spacing:.04em}.clock{position:absolute;bottom:15px;right:17px;font:12px ui-monospace,SFMono-Regular,monospace;background:#ffffffde;border-radius:7px;padding:7px 9px}.controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 18px}.controls p{margin:0;font-size:12px;color:var(--muted)}.buttons{display:flex;gap:7px}.mission{padding:22px;display:flex;flex-direction:column;gap:20px}.eyebrow{text-transform:uppercase;letter-spacing:.11em;font-size:10px;font-weight:750;color:var(--muted)}.mission h2{font-size:23px;line-height:1.2;letter-spacing:-.6px;margin:8px 0}.mission .intro{color:var(--muted);line-height:1.6;margin:0;font-size:13px}.flow{display:flex;gap:8px;align-items:center;font-size:11px;font-weight:650;color:var(--muted)}.flow b{font-size:10px;font-weight:400}.flow span.active{color:var(--blue)}.status-title{font-size:16px;font-weight:650;margin:0 0 6px}.status-copy{color:var(--muted);font-size:12px;line-height:1.6;min-height:39px;margin:0}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:18px 10px;margin-top:auto;border-top:1px solid var(--border);padding-top:18px}.metric span{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.metric strong{font-size:20px;font-weight:600;letter-spacing:-.5px}.section-head{display:flex;align-items:baseline;justify-content:space-between;margin:25px 0 12px}.section-head h2{font-size:16px;margin:0}.section-head span{font-size:12px;color:var(--muted)}.rangers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.ranger{padding:17px 16px;position:relative;min-height:215px;border-top:3px solid var(--color)}.ranger-head{display:flex;justify-content:space-between;align-items:center}.ranger-head h3{font-size:13px;margin:0}.pill{font-size:10px;border-radius:5px;background:#f0f3f7;padding:4px 6px;color:var(--muted)}.pill.moving{color:#2254db;background:#edf2ff}.ranger .position{font-size:11px;color:var(--muted);margin:4px 0 17px}.ranger .decision{font-size:12px;line-height:1.6;min-height:58px;margin:0 0 12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.timing{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;gap:7px}.timing strong{display:block;color:var(--ink);font-size:12px;font-weight:600;margin-top:4px}.track{height:6px;border-radius:8px;background:#edf0f4;position:relative;overflow:hidden;margin:12px 0 7px}.window{position:absolute;top:0;height:6px;background:var(--color);opacity:.8}.cursor{position:absolute;top:0;width:2px;height:6px;background:#172131}.track-label{font-size:10px;color:var(--muted)}.durable{margin-top:18px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 18px}.durable p{margin:4px 0 0;color:var(--muted);font-size:12px}.durable strong{font-size:12px}.durable .buttons button{font-size:12px;padding:8px 11px}.error{color:#b72a43;font-size:13px;margin:12px 0;line-height:1.5}.error:empty{display:none}footer{display:flex;justify-content:space-between;margin-top:16px;font-size:11px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:950px){.layout{grid-template-columns:1fr}.mission{display:grid;grid-template-columns:1fr 1fr;gap:16px}.metrics{margin:0;border:0;padding:0}.rangers{grid-template-columns:repeat(2,1fr)}}@media(max-width:580px){main{padding:18px 14px}.tag{display:none}.mission{display:flex}.rangers{grid-template-columns:1fr}.controls,.durable{align-items:flex-start;flex-direction:column}.viewport{min-height:220px}.section-head span{display:none}footer{line-height:1.6;gap:20px}}
-</style></head><body><main>
-<header><div class="brand"><div class="mark" aria-hidden="true"><i style="background:#dd5374"></i><i style="background:#4796cf"></i><i style="background:#dcaa35"></i><i style="background:#36a88b"></i></div><div><h1>Power Rangers</h1><p>Four AI actors. One shared body.</p></div></div><div class="tag"><span class="dot"></span> Local durable actors</div></header>
-<div class="layout"><section class="panel"><div class="viewport"><img id="frame" src="/frame.jpg" alt="A simulated quadruped with one colored leg for each Ranger"><span class="scene-tag" id="sceneTag">READY FOR THE TEAM</span><span class="clock" id="clock">0.00 s simulation time</span></div><div class="controls"><div class="buttons"><button class="primary" id="start">Run demo</button><button id="pause" hidden>Pause</button><button id="stop" hidden>Stop</button></div><p id="runNote">10 seconds of coordinated movement</p></div></section>
-<aside class="panel mission"><div><div class="eyebrow">Shared mission</div><h2>Move forward.<br>Coordinate together.</h2><p class="intro">Each Ranger chooses its own leg’s timing and placement, then reviews the other three plans.</p></div><div><div class="flow"><span id="flow0">Propose</span><b>→</b><span id="flow1">Negotiate</span><b>→</b><span id="flow2">Move</span></div><div style="height:14px"></div><p class="status-title" id="statusTitle">The team is ready</p><p class="status-copy" id="statusCopy">Start a live planning round. All four Rangers call their models independently.</p></div><div class="metrics"><div class="metric"><span>Distance</span><strong id="distance">0.00 m</strong></div><div class="metric"><span>Average speed</span><strong id="speed">0.00 m/s</strong></div><div class="metric"><span id="overlapLabel">Legs swinging</span><strong id="concurrent">0 / 4</strong></div><div class="metric"><span>Body tilt</span><strong id="tilt">0.0°</strong></div></div></aside></div>
-<div class="section-head"><h2>The Rangers</h2><span>Independent clocks · overlapping motion · measured touchdown</span></div><div class="rangers" id="rangers"></div>
-<div class="panel durable"><div><strong id="durableTitle">One shared, durable embodiment</strong><p id="durableCopy">Proposals, accepted policies and motion state survive actor restarts.</p></div><div class="buttons"><button id="restart" disabled>Restart actors</button><button id="resume">Resume saved</button></div></div>
-<p class="error" id="error" role="alert"></p><footer><span>MuJoCo Go1 · unassisted physics</span><span id="footer">Live model planning · numerical balance at execution time</span></footer>
-</main><script>
-const $=id=>document.getElementById(id), names={FR:'Front right',FL:'Front left',RR:'Rear right',RL:'Rear left'},colors={FR:'#dd5374',FL:'#4796cf',RR:'#dcaa35',RL:'#36a88b'};
-let state=null,busy=false,message='';
-for(const leg of Object.keys(names)){const card=document.createElement('article');card.className='panel ranger';card.id='card-'+leg;card.style.setProperty('--color',colors[leg]);card.innerHTML=`<div class="ranger-head"><h3>${leg} Ranger</h3><span class="pill">Ready</span></div><p class="position">${names[leg]} leg</p><p class="decision">Owns this leg’s phase, swing duration and foot placement.</p><div class="timing"><div>Phase offset<strong class="offset">—</strong></div><div>Swing time<strong class="duration">—</strong></div><div>Forward bias<strong class="bias">—</strong></div></div><div class="track"></div><div class="track-label">One shared 480 ms cycle</div>`;$('rangers').append(card)}
-async function command(name){busy=true;draw();try{const response=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name})});const result=await response.json();if(!response.ok)throw new Error(result.error);message='';await poll()}catch(error){message=error.message}finally{busy=false;draw()}}
-$('start').onclick=()=>command('start');$('pause').onclick=()=>command(state?.running?'pause':'play');$('stop').onclick=()=>command('stop');$('restart').onclick=()=>command('restart_actors');$('resume').onclick=()=>command('resume_saved');
-function draw(){
- if(!state)return;const a=state.actors,t=state.team,p=a?.planning,stage=a?.error?'error':p?.stage||'ready';const active=a&&!a.stopped&&!a.error&&['ready','running'].includes(t.status),planning=active&&!a.agreement;
- $('start').disabled=busy||active;$('start').textContent=a?'Run new demo':'Run demo';$('stop').hidden=!active;$('stop').disabled=busy;
- $('pause').hidden=!active||!a?.agreement;$('pause').disabled=busy;$('pause').textContent=state.running?'Pause':'Continue';
- $('restart').disabled=busy||!a?.agreement||Boolean(a?.error);$('resume').disabled=busy||active;
- $('clock').textContent=state.sim_time.toFixed(2)+' s simulation time';$('distance').textContent=(t.distance_m||0).toFixed(2)+' m';$('speed').textContent=((t.distance_m||0)/Math.max(.02,state.sim_time)).toFixed(2)+' m/s';$('tilt').textContent=state.body_tilt_deg.toFixed(1)+'°';
- const moving=Object.values(state.legs).filter(l=>l.swinging).length;$('concurrent').textContent=(active?moving:t.max_concurrent)+' / 4';$('overlapLabel').textContent=active?'Legs swinging':'Peak overlap';
- const titles={ready:'The team is ready',proposing:'Four independent proposals',negotiating:'Comparing the plans',checking:'Testing their agreement',running:state.running?'Moving as one team':'Motion paused',completed:'Demo complete',failed:'The robot lost balance',stopped:'Demo stopped',error:'Planning paused'};
- $('statusTitle').textContent=titles[stage]||stage;$('statusCopy').textContent=p?.message||'Start a live planning round. All four Rangers call their models independently.';
- if(stage==='completed')$('statusCopy').textContent=`${t.completed} measured touchdowns. Peak ${t.max_concurrent} overlapping swings. No global landing barrier.`;
- $('sceneTag').textContent=planning?'RANGERS ARE PLANNING':active?'INDEPENDENT LEG CLOCKS':a?'DURABLE EPISODE':'READY FOR THE TEAM';
- $('runNote').textContent=planning?'Models plan while the simulation clock is paused':`${state.sim_time.toFixed(1)} / ${t.duration_s.toFixed(0)} simulation seconds`;
- ['flow0','flow1','flow2'].forEach((id,i)=>$(id).classList.toggle('active',i===0&&stage==='proposing'||i===1&&['negotiating','checking'].includes(stage)||i===2&&['running','completed'].includes(stage)));
- for(const leg of Object.keys(names)){
-  const card=$('card-'+leg),l=state.legs[leg],work=p?.legs?.[leg],decision=a?.agreement?.decisions.find(d=>d.leg===leg)||work?.decision,plan=decision?.plan;
-  card.querySelector('.pill').textContent=planning?(work?.status==='thinking'?'Thinking':work?.status==='proposed'?'Proposed':'Waiting'):a&&!active?'Saved pose':l.swinging?'Swinging':l.contact?'Supporting':'Airborne';
-  card.querySelector('.pill').classList.toggle('moving',Boolean(l.swinging));
-  card.querySelector('.decision').textContent=plan?.reason||'Owns this leg’s phase, swing duration and foot placement.';card.querySelector('.decision').title=plan?.reason||'';
-  card.querySelector('.offset').textContent=plan?Math.round(plan.offset*480)+' ms':'—';card.querySelector('.duration').textContent=plan?Math.round(plan.swing_s*1000)+' ms':'—';card.querySelector('.bias').textContent=plan?(plan.forward_bias*100).toFixed(1)+' cm':'—';
-  const track=card.querySelector('.track');track.replaceChildren();if(plan){const start=((1-plan.swing_s/.48-plan.offset)%1+1)%1,width=plan.swing_s/.48;for(const [left,len] of [[start,Math.min(width,1-start)],[0,Math.max(0,start+width-1)]]){if(!len)continue;const bar=document.createElement('div');bar.className='window';bar.style.left=left*100+'%';bar.style.width=len*100+'%';track.append(bar)}const cursor=document.createElement('div');cursor.className='cursor';cursor.style.left=(((state.sim_time-.6)/.48%1+1)%1)*100+'%';track.append(cursor)}
-  card.querySelector('.track-label').textContent=a&&!active?'Policy preserved in durable state':planning?'Negotiating a repeating leg policy':l.swinging?Math.max(0,Math.round(l.swing_remaining_s*1000))+' ms of swing remaining':l.next_swing_s!==undefined?'Next swing in '+Math.round(l.next_swing_s*1000)+' ms':'One shared 480 ms cycle';
- }
- $('durableTitle').textContent=a?'Body '+a.episode.slice(0,8)+' · revision '+a.revision:'One shared, durable embodiment';
- $('durableCopy').textContent=a?.recovery?.checkpoint_equal?'Recovered identical motion state. All four Ranger decisions preserved.':a?`Saved at ${(a.committed_tick*.02).toFixed(2)} s. Restart the actors during motion to recover the same leg clocks.`:'Proposals, accepted policies and motion state survive actor restarts.';
- $('error').textContent=message||a?.error||'';
- const calls=a?.rounds?.reduce((n,r)=>n+r.decisions.length,0)||0;$('footer').textContent=calls?`${calls} persisted model decisions · no model calls in the physics loop`:'Live model planning · numerical balance at execution time';
-}
-async function poll(){try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Disconnected');state=await response.json();draw()}catch(error){$('error').textContent=error.message}}
-async function loop(){await poll();setTimeout(loop,180)}loop();const frame=$('frame');frame.onload=()=>setTimeout(()=>frame.src='/frame.jpg?t='+Date.now(),100);frame.onerror=()=>setTimeout(()=>frame.src='/frame.jpg?t='+Date.now(),1000);
-</script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Power Rangers · Plan together, move independently</title>
+  <link rel="stylesheet" href="/demo.css">
+  <script type="module" src="/demo.js"></script>
+</head>
+<body><main>
+  <header class="page-head">
+    <div class="brand"><div class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><h1>Power Rangers</h1><p>Four durable actors. One shared body.</p></div></div>
+    <div class="top-status"><span class="status-dot"></span><span id="connection">Local demo connected</span></div>
+  </header>
+  <div class="overview">
+    <section class="panel planner" aria-labelledby="plannerTitle">
+      <div class="panel-head"><div><span class="eyebrow">01 / Motion planning</span><h2 id="plannerTitle">A plan built through shared memory</h2></div><span class="badge" id="plannerBadge">Ready</span></div>
+      <p class="panel-intro">Rangers propose in parallel, read their peers, then refine from measured trials.</p>
+      <div class="planning-map" id="planningMap">
+        <svg viewBox="0 0 560 300" preserveAspectRatio="none" aria-hidden="true" class="connections">
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>
+          <path class="wire ranger-wire" d="M70 65 V94 Q70 104 82 104 H260 Q280 104 280 122 V135"/>
+          <path class="wire ranger-wire" d="M210 65 V91 Q210 104 225 104 H265 Q280 104 280 122 V135"/>
+          <path class="wire ranger-wire" d="M350 65 V91 Q350 104 335 104 H295 Q280 104 280 122 V135"/>
+          <path class="wire ranger-wire" d="M490 65 V94 Q490 104 478 104 H300 Q280 104 280 122 V135"/>
+          <path class="wire peer-wire" d="M174 165 H24 Q10 165 10 150 V47 Q10 32 23 32 H30"/>
+          <path class="wire trial-wire" d="M228 200 V215 Q228 225 214 225 H155 V246"/>
+          <path class="wire feedback-wire" d="M80 246 V209 Q80 193 95 193 H174"/>
+          <path class="wire accept-wire" d="M332 200 V215 Q332 225 346 225 H410 V246"/>
+        </svg>
+        <div class="actor-nodes" id="actorNodes"></div>
+        <span class="map-label shared-label" id="sharedLabel">Own-leg proposals → shared state</span>
+        <div class="body-node" id="bodyNode"><span class="storage-icon" aria-hidden="true">▤</span><div><strong>Body actor</strong><span id="bodyMemory">Proposals · feedback · accepted plan</span></div><span class="saved-dot" id="savedDot" title="Durable state"></span></div>
+        <span class="map-label feedback-label">Feedback ↺</span>
+        <div class="map-bottom">
+          <div class="map-node" id="trialNode"><span class="node-icon" aria-hidden="true">◷</span><div><strong>MuJoCo trials</strong><span id="trialNodeText">Measure speed + stability</span></div></div>
+          <div class="map-node" id="acceptedNode"><span class="node-icon" aria-hidden="true">✓</span><div><strong>Accepted plan</strong><span id="acceptedNodeText">Four independent leg policies</span></div></div>
+        </div>
+      </div>
+      <div class="stage-readout"><span class="stage-number" id="stageNumber">—</span><div><strong id="stageTitle" aria-live="polite">Ready to plan</strong><p id="stageCopy">Each actor owns its leg’s timing and placement. The Body stores their agreement.</p></div></div>
+      <div class="planner-foot"><span id="planningClock">Planning uses wall-clock time</span><span id="savedDecisions">0 saved model decisions</span></div>
+    </section>
+    <section class="panel execution-scene" aria-labelledby="executionTitle">
+      <div class="panel-head"><div><span class="eyebrow">02 / Execution</span><h2 id="executionTitle">One body. Four independent clocks.</h2></div><span class="badge" id="executionBadge">Waiting for a plan</span></div>
+      <div class="viewport"><img id="frame" src="/frame.jpg" alt="The simulated Go1 robot, with one colored leg per Ranger"><span class="scene-label" id="sceneLabel">Unassisted MuJoCo physics</span><span class="clock" id="clock">0.00 s</span></div>
+      <div class="scene-controls"><div class="buttons"><button class="primary" id="start">Run demo <span aria-hidden="true">↗</span></button><button id="pause" hidden>Pause</button><button id="stop" hidden>Stop</button></div><span id="runNote">10 simulation seconds</span></div>
+      <div class="metrics"><div><span>Distance</span><strong id="distance">0.00 m</strong></div><div><span>Average speed</span><strong id="speed">0.00 m/s</strong></div><div><span id="overlapLabel">Legs swinging</span><strong id="concurrent">0 / 4</strong></div><div><span>Body tilt</span><strong id="tilt">0.0°</strong></div></div>
+    </section>
+  </div>
+
+  <section class="panel execution-panel" aria-labelledby="timelineTitle">
+    <div class="panel-head"><div><span class="eyebrow">The movement loop</span><h2 id="timelineTitle">Planned swings, measured contact</h2></div><span class="badge" id="timelineClock">Simulation clock</span></div>
+    <div class="execution-path" id="executionPath">
+      <div><span class="path-index">1</span><strong>Accepted leg policies</strong><small>Phase · duration · placement</small></div><span class="path-arrow" aria-hidden="true">→</span>
+      <div><span class="path-index">2</span><strong>Balance + joint control</strong><small>Every 20–40 ms</small></div><span class="path-arrow" aria-hidden="true">→</span>
+      <div><span class="path-index">3</span><strong>MuJoCo physics</strong><small>Every 4 ms · measured contact</small></div><span class="path-arrow" aria-hidden="true">→</span>
+      <div><span class="path-index">4</span><strong>Durable Body checkpoint</strong><small>Every 100 simulation ms</small></div>
+    </div>
+    <div class="timeline-legend"><span><i class="legend-swing"></i>Planned swing</span><span><i class="legend-contact"></i>Foot on ground</span><span><i class="legend-touch">◆</i>Confirmed touchdown</span><span><i class="legend-late">×</i>Missed deadline</span><span class="future-legend">Faded bars = upcoming plan</span></div>
+    <div class="timeline-wrap"><svg id="motionTimeline" viewBox="0 0 1120 220" role="img" aria-label="Four leg timelines showing planned swings and measured ground contacts"></svg><p id="timelineEmpty">The timeline fills when the accepted plan starts executing.</p></div>
+    <div class="execution-note"><span id="executionNote">Each leg follows its own clock. A late touchdown does not delay the other legs.</span><strong>No model calls in this loop</strong></div>
+  </section>
+
+  <section class="panel planning-history" aria-labelledby="roundsTitle">
+    <div class="panel-head"><div><span class="eyebrow">Inspect the decisions</span><h2 id="roundsTitle">What each Ranger contributed</h2></div><button class="quiet" id="followLive" hidden>Follow latest round</button></div>
+    <div class="round-tabs" id="roundTabs" role="tablist" aria-label="Saved planning rounds"></div>
+    <div class="round-caption"><p id="roundDescription">Start a demo to see real proposals, peer reviews and feedback-driven revisions.</p><span class="badge" id="roundSaved">No proposals yet</span></div>
+    <div class="rangers" id="rangers"></div>
+    <div class="round-detail">
+      <article class="decision-detail" aria-labelledby="decisionTitle"><div class="detail-heading"><span class="leg-dot" id="detailDot"></span><h3 id="decisionTitle">FR Ranger · proposal</h3><span id="decisionLatency"></span></div><p id="decisionReason">Choose a Ranger to inspect its own decision. Proposals are shown as written before trial validation.</p><div id="decisionParams" class="decision-params"></div></article>
+      <aside class="trial-detail"><div class="detail-heading"><h3>Measured feedback</h3><span class="badge" id="trialBadge">No trial yet</span></div><div id="trialResults" class="trial-results"><p class="muted">Shared trials test the four proposals together. Results feed the next planning pass.</p></div></aside>
+    </div>
+  </section>
+
+  <section class="panel durable"><div class="durable-copy"><span class="storage-icon" aria-hidden="true">▤</span><div><strong id="durableTitle">The plan and motion state are durable</strong><p id="durableCopy">Restarting actors preserves their decisions and the exact execution checkpoint.</p></div></div><div class="checkpoint-readout"><span>Saved <b id="savedTime">0.00 s</b></span><span>Live <b id="liveTime">0.00 s</b></span><div class="checkpoint-track"><i id="checkpointProgress"></i></div></div><div class="buttons"><button id="restart" disabled>Restart actors</button><button id="resume">Resume saved</button></div></section>
+  <p class="error" id="error" role="alert"></p>
+  <footer><span>MuJoCo Go1 · local Terse actors</span><span>Models plan before the run. The numerical controller executes the accepted policies.</span></footer>
+</main></body></html>

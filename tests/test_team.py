@@ -60,6 +60,28 @@ def test_exact_checkpoint_with_overlapping_leg_actions():
     restored.step(30)
     assert robot.checkpoint() == restored.checkpoint()
     assert not restored.data.eq_active.any() and not restored.data.xfrc_applied.any()
+    assert len(restored.team['trace']) == 120
+    assert restored.team['trace'][-1]['tick'] == 120
+    assert restored.team['trace'][-1]['contact'] == list(restored.contacts().values())
+
+
+def test_saved_planning_rounds_are_visible_before_execution(tmp_path):
+    class Runtime:
+        data_dir = str(tmp_path)
+    session = TeamSession(TeamRobot(), Runtime(), 'test')
+    session.record = {'revision': 0, 'checkpoint': '{"tick":0}', 'agreement': None,
+                      'validation': None, 'rounds': [], 'stopped': False}
+    saved = {'rounds': [{'round': 0, 'decisions': []}], 'draft': {'round': 0},
+             'validation': None, 'validations': []}
+    session._published(saved)
+    telemetry = session.telemetry()
+    assert telemetry['agreement'] is None and telemetry['rounds'] == saved['rounds']
+    telemetry['rounds'].clear()
+    assert len(session.telemetry()['rounds']) == 1
+    session._progress(stage='checking', round=1)
+    started = session.progress['stage_started_at_ms']
+    session._progress(trial={'completed': 1, 'total': 2})
+    assert session.progress['stage_started_at_ms'] == started
 
 
 class FakeBrain:
@@ -101,6 +123,7 @@ def test_four_durable_models_negotiate_and_recover(tmp_path):
                 time.sleep(.01)
         assert len(brain.calls) == 12 and len(set(brain.calls)) == 12 and brain.max_active == 4
         assert all(p['forward_bias'] == .002 for p in robot.team['policy'].values())
+        assert len(session.telemetry()['validations']) == 2
         result = session.restart()
         assert result['checkpoint_equal'] and result['actors_reactivated'] and result['decisions_preserved']
         while robot.team['status'] == 'running':
