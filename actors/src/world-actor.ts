@@ -1,14 +1,68 @@
 import {Actor, Persisted, Ephemeral} from "terse-sdk/actor";
 import {waypoint, validateRequest, type PlanRequest} from "./world-policy";
+import {chooseSlot, validateBuild, type BuildObservation} from "./build-policy";
+import {authorize, cancel, confirm, type DeliveryRecord} from "./delivery-policy";
 
 type Memory = {slot:number; seed:number; decisions:number; epoch:number; sequence:number; input:string;
   mode:"roam"|"assemble"; target:number[]; docked:boolean};
+
+const readDelivery = (saved:string):DeliveryRecord|null => saved ? JSON.parse(saved) : null;
 
 /** One real, independently persisted actor for each complete robot. */
 export class WorldRanger extends Actor {
   @Persisted private record = "";
   @Ephemeral private activation = crypto.randomUUID();
   @Persisted private physicsRecord = "";
+  @Persisted private buildRecord = "";
+
+  /** This Ranger's own durable choice of its next job on the site. Exact retries are idempotent. */
+  async decideBuild(input:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    const observation=JSON.parse(input) as BuildObservation;validateBuild(observation);
+    const previous=this.buildRecord?JSON.parse(this.buildRecord):{sequence:0,placed:[],confirmed:0};
+    if(observation.sequence===previous.sequence){if(previous.input!==input)throw new Error("Conflicting build retry");return this.buildRecord;}
+    if(observation.sequence!==previous.sequence+1)throw new Error("Out-of-order build observation");
+    this.buildRecord=JSON.stringify({...previous,sequence:observation.sequence,input,...chooseSlot(observation)});
+    return this.buildRecord;
+  }
+
+  /**
+   * Preview receipt for the slot this Ranger claimed, counted once per claim. A timed animation is never proof
+   * of a physical placement, so this only ever records "kinematic". Measured work goes through confirmDelivery.
+   */
+  async confirmPlaced(sequence:number, slotId:number, evidence:"kinematic"): Promise<string> {
+    if(!this.buildRecord)throw new Error("No build claim to confirm");
+    const memory=JSON.parse(this.buildRecord);
+    if(evidence!=="kinematic")throw new Error("A preview receipt can only be kinematic; measured work uses confirmDelivery");
+    if(memory.sequence!==sequence||memory.action!=="claim"||memory.slotId!==slotId)throw new Error("Placement receipt does not match the saved claim");
+    if(memory.confirmed===sequence)return this.buildRecord;
+    this.buildRecord=JSON.stringify({...memory,confirmed:sequence,placed:[...memory.placed,{slotId,evidence}]});
+    return this.buildRecord;
+  }
+  @Persisted private deliveryRecord = "";
+
+  /** Durably authorize one named object and destination for this Ranger's own hardware. */
+  async authorizeDelivery(input:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    this.deliveryRecord=JSON.stringify(authorize(readDelivery(this.deliveryRecord),JSON.parse(this.record).slot,input));
+    return this.deliveryRecord;
+  }
+
+  /** Marks the job placed, only with the native adapter's measured receipt for this exact job. */
+  async confirmDelivery(jobId:string, receiptJson:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    this.deliveryRecord=JSON.stringify(confirm(readDelivery(this.deliveryRecord),jobId,receiptJson));
+    return this.deliveryRecord;
+  }
+
+  /** Stops an active job on an explicit stop. A completed receipt is left as it is. */
+  async cancelDelivery(jobId:string): Promise<string> {
+    if(!this.record)throw new Error("Initialize this Ranger first");
+    this.deliveryRecord=JSON.stringify(cancel(readDelivery(this.deliveryRecord),jobId));
+    return this.deliveryRecord;
+  }
+
+  async inspectDelivery(): Promise<string> {return this.deliveryRecord||"{}";}
 
   async authorizePhysics(input:string): Promise<string> {
     if(!this.record)throw new Error("Initialize this Ranger first");
@@ -62,7 +116,7 @@ export class WorldRanger extends Actor {
   }
 
   async inspect(): Promise<string> {
-    return JSON.stringify({id:this.id, activation:this.activation, ...(this.record ? JSON.parse(this.record) : {})});
+    return JSON.stringify({id:this.id, activation:this.activation, ...(this.record ? JSON.parse(this.record) : {}), build:this.buildRecord ? JSON.parse(this.buildRecord) : null});
   }
 
   async inspectPhysics(): Promise<string> {return this.physicsRecord||"{}";}

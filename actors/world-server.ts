@@ -5,6 +5,7 @@ import {resolve} from "node:path";
 import {World} from "./world-engine";
 import {RANGERS} from "./src/world-policy";
 import {PhysicsWorker} from "./world-physics";
+import {Construction,canBuild,type BuildRequest} from "./world-construction";
 
 const root=resolve(import.meta.dir,"..");
 const port=Number(process.env.RANGERS_WORLD_PORT??8771), actorPort=Number(process.env.RANGERS_WORLD_ACTOR_PORT??7111);
@@ -58,6 +59,19 @@ function work(slot:number) {
   }
 }
 
+const site=new Construction(),siteInflight=new Set<Promise<void>>();
+function tickSite() {
+  if(world.paused||world.error)return;
+  site.step(.05,canBuild(world),world.bots,(slot,kind,text)=>world.event(slot,kind,text));
+  for(const request of site.takeRequests()){
+    const promise:Promise<void>=rpc(world.bots[request.slot].id,request.method,request.args)
+      .then(memory=>site.receipt(request as BuildRequest,memory))
+      .catch(()=>{world.error='A build decision has an uncertain outcome. Restart this world; do not guess or replay.';world.event(request.slot,'error',world.error);})
+      .finally(()=>siteInflight.delete(promise));
+    siteInflight.add(promise);
+  }
+}
+
 async function physicsTick() {
   if(!physicsWorker||!world.physics||physicsBusy||commandBusy||world.paused||world.error)return;
   const worker=physicsWorker;
@@ -90,6 +104,7 @@ async function command(name:string) {
   commandBusy=true;
   try {
     await physicsBusy;
+    if(name==='rebuild'){if(!site.complete)throw new Error('The structure is not finished yet');site.rebuild();world.event(-1,'build','New job started.');return;}
     if(name==='patrol'){
       if(world.phase!=='combined'||world.error)throw new Error('Assemble a healthy team first');
       if(!physicsWorker){
@@ -110,7 +125,7 @@ async function command(name:string) {
   } finally {commandBusy=false;}
 }
 
-const assets:Record<string,string>={"/":"world/index.html","/world.js":"world/world.js","/robots.js":"world/robots.js","/style.css":"world/style.css",
+const assets:Record<string,string>={"/":"world/index.html","/world.js":"world/world.js","/city-plan.js":"world/city-plan.js","/city.js":"world/city.js","/site-plan.js":"world/site-plan.js","/construction.js":"world/construction.js","/views.js":"world/views.js","/builder-view.js":"world/builder-view.js","/city.css":"world/city.css","/robots.js":"world/robots.js","/style.css":"world/style.css",
   "/vendor/three.module.js":"node_modules/three/build/three.module.js","/vendor/three.core.js":"node_modules/three/build/three.core.js",
   "/vendor/OrbitControls.js":"node_modules/three/examples/jsm/controls/OrbitControls.js"};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
@@ -118,7 +133,7 @@ const server=Bun.serve({hostname:"127.0.0.1",port,maxRequestBodySize:512,async f
   const url=new URL(request.url);
   if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(request.headers.get("Host")??""))return json({error:"Local host only"},403);
   if(request.method==="GET") {
-    if(url.pathname==="/api/state")return json({...world.snapshot(),inflight:inflight.size+Number(!!physicsBusy),rangers:RANGERS});
+    if(url.pathname==="/api/state")return json({...world.snapshot(),inflight:inflight.size+siteInflight.size+Number(!!physicsBusy),rangers:RANGERS,site:site.snapshot()});
     const path=assets[url.pathname];if(!path)return json({error:"Not found"},404);
     const file=Bun.file(resolve(root,path));if(!await file.exists())return json({error:"Asset missing"},404);
     return new Response(file,{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
@@ -129,9 +144,9 @@ const server=Bun.serve({hostname:"127.0.0.1",port,maxRequestBodySize:512,async f
   try {const text=await request.text();if(text.length>512)throw new Error("Command too large");const data=JSON.parse(text);await command(data.command);return json({ok:true});}
   catch(error){return json({error:error instanceof Error?error.message:"Invalid command"},400);}
 }});
-const interval=setInterval(()=>{if(commandBusy)return;if(world.physics){void physicsTick();return;}world.step(.05);world.bots.forEach(b=>work(b.slot));},50);
+const interval=setInterval(()=>{if(commandBusy)return;if(world.physics){void physicsTick();return;}world.step(.05);tickSite();world.bots.forEach(b=>work(b.slot));},50);
 let stopping=false;
-async function stop(){if(stopping)return;stopping=true;clearInterval(interval);server.stop(true);await physicsBusy;await physicsWorker?.stop();await Promise.allSettled(inflight.values());await runtime.stop();process.exit(0);}
+async function stop(){if(stopping)return;stopping=true;clearInterval(interval);server.stop(true);await physicsBusy;await physicsWorker?.stop();await Promise.allSettled([...inflight.values(),...siteInflight]);await runtime.stop();process.exit(0);}
 process.on("SIGINT",stop);process.on("SIGTERM",stop);
 runtime.closed.catch(()=>{world.error="Local Terse runtime disconnected; world stopped.";world.event(-1,"error",world.error);});
 console.log(`Ranger World: http://127.0.0.1:${port} (local Terse :${actorPort})`);
